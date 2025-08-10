@@ -1,5 +1,5 @@
 import React from 'react';
-import { createStackNavigator } from '@react-navigation/stack';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import Login from '../components/Login';
 import Logout from '../components/Logout';
 import Inventory from '../components/Inventory';
@@ -8,18 +8,68 @@ import TransactionCreate from '../components/TransactionCreate';
 import Monitoring from '../components/Monitoring';
 import Dashboard from '../components/Dashboard';
 
-const Stack = createStackNavigator();
+// Define navigation param list
+type RootStackParamList = {
+  Login: undefined;
+  Logout: undefined;
+  Inventory: undefined;
+  TransactionIndex: undefined;
+  TransactionCreate: undefined;
+  Monitoring: undefined;
+  Dashboard: undefined;
+};
+
+const Stack = createNativeStackNavigator<RootStackParamList>();
 
 const AppNavigator = () => {
   return (
-    <Stack.Navigator initialRouteName="Login">
-      <Stack.Screen name="Login" component={Login} />
-      <Stack.Screen name="Logout" component={Logout} />
-      <Stack.Screen name="Inventory" component={Inventory} />
-      <Stack.Screen name="TransactionIndex" component={TransactionIndex} />
-      <Stack.Screen name="TransactionCreate" component={TransactionCreate} />
-      <Stack.Screen name="Monitoring" component={Monitoring} />
-      <Stack.Screen name="Dashboard" component={Dashboard} />
+    <Stack.Navigator
+      initialRouteName="Login"
+      screenOptions={{
+        headerStyle: {
+          backgroundColor: '#1E2A3A',
+        },
+        headerTintColor: '#00FFAA',
+        headerTitleStyle: {
+          fontWeight: 'bold',
+        },
+      }}
+    >
+      <Stack.Screen
+        name="Login"
+        component={Login}
+        options={{ title: 'Login' }}
+      />
+      <Stack.Screen
+        name="Logout"
+        component={Logout}
+        options={{ title: 'Logout - SEPATU BY SOVAN' }}
+      />
+      <Stack.Screen
+        name="Inventory"
+        component={Inventory}
+        options={{ title: 'Inventory' }}
+      />
+      <Stack.Screen
+        name="TransactionIndex"
+        component={TransactionIndex}
+        options={{ title: 'Daftar Transaksi' }}
+      />
+      <Stack.Screen
+        name="TransactionCreate"
+        component={TransactionCreate}
+        options={{ title: 'Buat Transaksi Baru' }}
+      />
+      <Stack.Screen
+        name="Monitoring"
+        component={Monitoring}
+        options={{ title: 'Monitoring' }}
+      />
+      <Stack.Screen
+        name="Dashboard"
+        component={Dashboard}
+        options={{ title: 'Dashboard' }}
+      />
     </Stack.Navigator>
   );
 };

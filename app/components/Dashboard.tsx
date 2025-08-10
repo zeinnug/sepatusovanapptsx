@@ -513,7 +513,7 @@ const Dashboard: React.FC = () => {
             <TouchableOpacity
               style={styles.menuItem}
               onPress={() => {
-                navigation.navigate('TransactionCreate');
+                navigation.navigate('TransactionIndex');
                 setMenuVisible(false);
               }}
             >
