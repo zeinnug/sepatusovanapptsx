@@ -1,20 +1,33 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  FlatList,
+  ActivityIndicator,
+  TouchableOpacity,
+  Platform,
+  Alert,
+} from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Picker } from '@react-native-picker/picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import * as Print from 'expo-print';
 
-// Define navigation param list
+// Navigation param list
 type RootStackParamList = {
   TransactionIndex: undefined;
   TransactionCreate: undefined;
 };
 
-// Define navigation prop type
-type TransactionIndexNavigationProp = NativeStackNavigationProp<RootStackParamList, 'TransactionIndex'>;
+// Navigation prop type
+type TransactionIndexNavigationProp = NativeStackNavigationProp<
+  RootStackParamList,
+  'TransactionIndex'
+>;
 
-// Define interfaces for API data
+// Interfaces for API data
 interface TransactionItem {
   id: number;
   product_id: number;
@@ -64,37 +77,51 @@ interface Props {
 const TransactionIndex: React.FC<Props> = ({ navigation }) => {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const [printing, setPrinting] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  const [filterDate, setFilterDate] = useState<Date>(new Date()); // Current date: August 10, 2025
+  const [filterDate, setFilterDate] = useState<Date>(new Date()); // Current date: August 19, 2025
   const [showDatePicker, setShowDatePicker] = useState<boolean>(false);
   const [filterPaymentMethod, setFilterPaymentMethod] = useState<string>('Semua Metode');
   const [filterPaymentStatus, setFilterPaymentStatus] = useState<string>('Semua Status');
+  const [selectedPrinter, setSelectedPrinter] = useState<
+    { name: string; url: string } | undefined
+  >();
 
-  const paymentMethods = ['Semua Metode', 'cash', 'qris'];
+  const paymentMethods = ['Semua Metode', 'cash', 'qris', 'Transfer Bank'];
   const paymentStatuses = ['Semua Status', 'paid', 'unpaid'];
+  const WIB_OFFSET = 7 * 60 * 60 * 1000; // UTC+7 in milliseconds
+  const API_URL = 'http://192.168.1.8:8000/api/transactions';
 
+  // Format date to YYYY-MM-DD in WIB
+  const formatDateWIB = (date: Date): string => {
+    const wibDate = new Date(date.getTime() + WIB_OFFSET);
+    return `${wibDate.getUTCFullYear()}-${(wibDate.getUTCMonth() + 1)
+      .toString()
+      .padStart(2, '0')}-${wibDate.getUTCDate().toString().padStart(2, '0')}`;
+  };
+
+  // Format date for display (dd/MM/yyyy)
+  const formatDisplayDate = (date: Date): string => {
+    const wibDate = new Date(date.getTime() + WIB_OFFSET);
+    return `${wibDate.getUTCDate().toString().padStart(2, '0')}/${(wibDate.getUTCMonth() + 1)
+      .toString()
+      .padStart(2, '0')}/${wibDate.getUTCFullYear()}`;
+  };
+
+  // Fetch transactions
   const fetchTransactions = async () => {
     try {
-      console.log('Attempting to retrieve token from AsyncStorage...');
+      setLoading(true);
+      setError(null);
+
       const token = await AsyncStorage.getItem('token');
-      console.log('Retrieved token:', token ? 'Token found' : 'No token found');
-
+      console.log('Token:', token ? 'Found' : 'Not found');
       if (!token) {
-        setError('No authentication token found. Please log in again.');
-        setLoading(false);
-        return;
+        throw new Error('No authentication token found. Please log in again.');
       }
-
-      // Format date in WIB (UTC+7) as YYYY-MM-DD
-      const wibOffset = 7 * 60; // WIB is UTC+7 (7 hours in minutes)
-      const filterDateWIB = new Date(filterDate.getTime() + wibOffset * 60 * 1000);
-      const formattedDate = filterDateWIB.toISOString().split('T')[0]; // YYYY-MM-DD
-      console.log('Formatted filter date (WIB):', formattedDate);
 
       const params = new URLSearchParams();
-      if (formattedDate !== new Date().toISOString().split('T')[0]) {
-        params.append('date', formattedDate);
-      }
+      params.append('date', formatDateWIB(filterDate));
       if (filterPaymentMethod !== 'Semua Metode') {
         params.append('payment_method', filterPaymentMethod);
       }
@@ -102,8 +129,10 @@ const TransactionIndex: React.FC<Props> = ({ navigation }) => {
         params.append('payment_status', filterPaymentStatus);
       }
 
-      console.log('Fetching transactions from API with URL:', `http://192.168.1.6:8000/api/transactions?${params.toString()}`);
-      const response = await fetch(`http://192.168.1.6:8000/api/transactions?${params.toString()}`, {
+      const url = `${API_URL}?${params.toString()}`;
+      console.log('Fetching from:', url);
+
+      const response = await fetch(url, {
         method: 'GET',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -111,41 +140,25 @@ const TransactionIndex: React.FC<Props> = ({ navigation }) => {
         },
       });
 
-      console.log('API response status:', response.status);
+      console.log('Response status:', response.status);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
       const result: ApiResponse = await response.json();
-      console.log('API response data:', JSON.stringify(result.data.transactions, null, 2));
+      console.log('API response:', JSON.stringify(result, null, 2));
 
       if (result.success) {
-        // Check if API returned no transactions
-        if (result.data.transactions.length === 0) {
-          console.log('No transactions returned from API');
-          setTransactions([]);
-        } else {
-          // Client-side filtering by local date (WIB)
-          const localFilterDate = new Date(filterDate);
-          localFilterDate.setHours(0, 0, 0, 0); // Reset time to midnight
-          const filteredTransactions = result.data.transactions.filter((transaction) => {
-            // Convert server UTC date to WIB
-            const transactionDate = new Date(transaction.created_at);
-            const transactionDateWIB = new Date(transactionDate.getTime() + wibOffset * 60 * 1000);
-            transactionDateWIB.setHours(0, 0, 0, 0); // Reset time to midnight
-            const transactionLocalDate = transactionDateWIB.toLocaleDateString('en-CA'); // YYYY-MM-DD
-            const localFilterDateStr = localFilterDate.toLocaleDateString('en-CA');
-            console.log(
-              `Comparing local filter date ${localFilterDateStr} with transaction date ${transactionLocalDate} for ${transaction.invoice_number}`
-            );
-            return transactionLocalDate === localFilterDateStr;
-          });
-          console.log('Filtered transactions:', JSON.stringify(filteredTransactions, null, 2));
-          setTransactions(filteredTransactions);
-        }
+        console.log('Raw transactions:', result.data.transactions.length);
+        // Temporarily use raw data to debug
+        setTransactions(result.data.transactions);
       } else {
-        setError('Failed to fetch transactions: ' + (result.message || 'Unknown error'));
+        throw new Error(result.message || 'Failed to fetch transactions');
       }
     } catch (err: unknown) {
-      console.error('Error fetching transactions:', err);
       const errorMessage = err instanceof Error ? err.message : 'Unknown error';
-      setError('Error fetching transactions: ' + errorMessage);
+      console.error('Fetch error:', errorMessage);
+      setError(`Error fetching transactions: ${errorMessage}`);
     } finally {
       setLoading(false);
     }
@@ -156,30 +169,146 @@ const TransactionIndex: React.FC<Props> = ({ navigation }) => {
   }, [filterDate, filterPaymentMethod, filterPaymentStatus]);
 
   const onDateChange = (event: any, selectedDate?: Date) => {
-    const currentDate = selectedDate || filterDate;
-    setShowDatePicker(false);
-    setFilterDate(currentDate);
+    setShowDatePicker(Platform.OS === 'ios');
+    if (selectedDate) {
+      const wibDate = new Date(selectedDate.getTime() + WIB_OFFSET);
+      wibDate.setUTCHours(0, 0, 0, 0);
+      setFilterDate(new Date(wibDate.getTime() - WIB_OFFSET));
+    }
   };
 
-  const renderTransaction = ({ item }: { item: Transaction }) => (
-    <View style={styles.transactionCard}>
-      <Text style={styles.invoiceText}>{item.invoice_number}</Text>
-      <Text style={styles.customerText}>Customer: {item.customer_name}</Text>
-      <Text style={styles.amountText}>Total: Rp {item.final_amount.toLocaleString()}</Text>
-      <Text style={styles.paymentText}>Payment: {item.payment_method}</Text>
-      <Text style={styles.dateText}>
-        Date: {new Date(item.created_at).toLocaleDateString()}
-      </Text>
-      <View style={styles.itemsContainer}>
-        <Text style={styles.itemsTitle}>Items:</Text>
-        {item.items.map((product: TransactionItem) => (
-          <Text key={product.id} style={styles.itemText}>
-            {product.product_name} (Qty: {product.quantity}, Rp {product.subtotal.toLocaleString()})
-          </Text>
-        ))}
-      </View>
-    </View>
-  );
+  const printReceipt = async (transaction: Transaction) => {
+    try {
+      setPrinting(true);
+      if (Platform.OS === 'ios' && !selectedPrinter) {
+        Alert.alert('Error', 'Please select a printer first.');
+        return;
+      }
+
+      const totalQuantity = transaction.items.reduce((sum, item) => sum + item.quantity, 0);
+
+      const html = `
+        <html>
+          <head>
+            <meta name="viewport" content="width=576, initial-scale=1.0" />
+            <style>
+              body { width: 576px; margin: 0; padding: 8px; font-family: 'Courier New', Courier, monospace; font-size: 12px; line-height: 1.2; color: #000; text-align: center; }
+              h1 { font-size: 14px; font-weight: bold; margin: 4px 0; }
+              .line { border-top: 1px dashed #000; margin: 4px 0; }
+              .item { text-align: left; margin: 2px 0; font-size: 11px; }
+              .total { font-weight: bold; font-size: 12px; margin-top: 8px; }
+              .row { display: flex; justify-content: space-between; margin: 2px 0; }
+              .label { font-weight: bold; }
+              p { margin: 2px 0; }
+            </style>
+          </head>
+          <body>
+            <h1>Sepatu by Sovan</h1>
+            <p>Jl. Puri Anjasmoro B10/9 Smg</p>
+            <p>0818671005</p>
+            <div class="line"></div>
+            <div class="row">
+              <span class="label">Invoice:</span>
+              <span>${transaction.invoice_number}</span>
+            </div>
+            <div class="row">
+              <span class="label">Date:</span>
+              <span>${formatDisplayDate(new Date(transaction.created_at))} ${new Date(
+        transaction.created_at
+      )
+        .toISOString()
+        .slice(11, 16)}</span>
+            </div>
+            <div class="row">
+              <span class="label">Cashier:</span>
+              <span>${transaction.user_name}</span>
+            </div>
+            <div class="row">
+              <span class="label">Customer:</span>
+              <span>${transaction.customer_name}</span>
+            </div>
+            <div class="row">
+              <span class="label">Phone:</span>
+              <span>${transaction.customer_phone}</span>
+            </div>
+            <div class="line"></div>
+            ${transaction.items
+              .map(
+                (item) =>
+                  `<div class="item">${item.product_name} (UNIT-${item.unit_code})${
+                    item.size ? `, Size: ${item.size}` : ''
+                  }${item.color ? `, Color: ${item.color}` : ''}<br>${
+                    item.quantity
+                  } x Rp ${item.price.toLocaleString('id-ID')} = Rp ${item.subtotal.toLocaleString(
+                    'id-ID'
+                  )}</div>`
+              )
+              .join('')}
+            <div class="line"></div>
+            <div class="row">
+              <span class="label">Total Quantity:</span>
+              <span>${totalQuantity}</span>
+            </div>
+            <div class="row">
+              <span class="label">Subtotal:</span>
+              <span>Rp ${transaction.total_amount.toLocaleString('id-ID')}</span>
+            </div>
+            <div class="row">
+              <span class="label">Discount:</span>
+              <span>Rp ${transaction.discount_amount.toLocaleString('id-ID')}</span>
+            </div>
+            <div class="row">
+              <span class="label">Tax:</span>
+              <span>Rp ${transaction.tax_amount.toLocaleString('id-ID')}</span>
+            </div>
+            <div class="row total">
+              <span class="label">Total:</span>
+              <span>Rp ${transaction.final_amount.toLocaleString('id-ID')}</span>
+            </div>
+            <div class="row">
+              <span class="label">Payment:</span>
+              <span>${transaction.payment_method}${
+                transaction.card_type ? ` (${transaction.card_type})` : ''
+              }</span>
+            </div>
+            <div class="line"></div>
+            <p>Thank you for your purchase!</p>
+            <p>Barang Tidak Sesuai Dapat Ditukarkan, Asalkan Belum Dipakai.</p>
+            <p>Gabung grup Whatsapp kami untuk info diskon dan penawaran menarik!</p>
+            <p>https://chat.whatsapp.com/CSk1pDf9g2STaQk2a5e?</p>
+          </body>
+        </html>
+      `;
+
+      await Print.printAsync({
+        html,
+        printerUrl: Platform.OS === 'ios' ? selectedPrinter?.url : undefined,
+        width: 576,
+      });
+      Alert.alert('Success', 'Receipt printed successfully');
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error('Print error:', errorMessage);
+      Alert.alert('Error', `Failed to print receipt: ${errorMessage}`);
+    } finally {
+      setPrinting(false);
+    }
+  };
+
+  const selectPrinter = async () => {
+    if (Platform.OS === 'ios') {
+      try {
+        const printer = await Print.selectPrinterAsync();
+        if (printer) {
+          setSelectedPrinter(printer);
+          Alert.alert('Success', `Printer selected: ${printer.name}`);
+        }
+      } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        Alert.alert('Error', `Failed to select printer: ${errorMessage}`);
+      }
+    }
+  };
 
   const resetFilters = () => {
     setFilterDate(new Date());
@@ -187,10 +316,43 @@ const TransactionIndex: React.FC<Props> = ({ navigation }) => {
     setFilterPaymentStatus('Semua Status');
   };
 
+  const renderTransaction = ({ item }: { item: Transaction }) => (
+    <View style={styles.transactionCard}>
+      <Text style={styles.invoiceText}>{item.invoice_number}</Text>
+      <Text style={styles.customerText}>Customer: {item.customer_name}</Text>
+      <Text style={styles.amountText}>
+        Total: Rp {item.final_amount.toLocaleString('id-ID')}
+      </Text>
+      <Text style={styles.paymentText}>Payment: {item.payment_method}</Text>
+      <Text style={styles.dateText}>
+        Date: {formatDisplayDate(new Date(item.created_at))} {item.created_at.slice(11, 16)}
+      </Text>
+      <View style={styles.itemsContainer}>
+        <Text style={styles.itemsTitle}>Items:</Text>
+        {item.items.map((product: TransactionItem) => (
+          <Text key={product.id} style={styles.itemText}>
+            {product.product_name} (Qty: {product.quantity}, Rp{' '}
+            {product.subtotal.toLocaleString('id-ID')})
+          </Text>
+        ))}
+      </View>
+      <TouchableOpacity
+        style={[styles.printButton, printing && styles.printButtonDisabled]}
+        onPress={() => printReceipt(item)}
+        disabled={printing}
+      >
+        <Text style={styles.printButtonText}>
+          {printing ? 'Printing...' : 'Cetak Struk'}
+        </Text>
+      </TouchableOpacity>
+    </View>
+  );
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#00FFAA" />
+        <Text style={styles.loadingText}>Loading transactions...</Text>
       </View>
     );
   }
@@ -233,19 +395,30 @@ const TransactionIndex: React.FC<Props> = ({ navigation }) => {
         </TouchableOpacity>
       </View>
 
+      {Platform.OS === 'ios' && (
+        <TouchableOpacity style={styles.selectPrinterButton} onPress={selectPrinter}>
+          <Text style={styles.selectPrinterButtonText}>
+            {selectedPrinter ? `Printer: ${selectedPrinter.name}` : 'Pilih Printer'}
+          </Text>
+        </TouchableOpacity>
+      )}
+
       <View style={styles.filterContainer}>
         <Text style={styles.filterTitle}>Filter Transaksi</Text>
         <View style={styles.filterRow}>
           <View style={styles.filterItem}>
             <Text style={styles.filterLabel}>Tanggal</Text>
-            <TouchableOpacity onPress={() => setShowDatePicker(true)} style={styles.filterInput}>
-              <Text style={styles.dateTextInput}>{filterDate.toLocaleDateString('en-GB')}</Text>
+            <TouchableOpacity
+              onPress={() => setShowDatePicker(true)}
+              style={styles.filterInput}
+            >
+              <Text style={styles.dateTextInput}>{formatDisplayDate(filterDate)}</Text>
             </TouchableOpacity>
             {showDatePicker && (
               <DateTimePicker
                 value={filterDate}
                 mode="date"
-                display="default"
+                display={Platform.OS === 'ios' ? 'inline' : 'default'}
                 onChange={onDateChange}
                 style={styles.datePicker}
                 textColor="#FFD700"
@@ -291,7 +464,9 @@ const TransactionIndex: React.FC<Props> = ({ navigation }) => {
       {transactions.length === 0 ? (
         <View style={styles.noTransactions}>
           <Text style={styles.noTransactionsText}>TIDAK ADA TRANSAKSI</Text>
-          <Text style={styles.noTransactionsSubText}>Belum ada transaksi untuk filter yang dipilih.</Text>
+          <Text style={styles.noTransactionsSubText}>
+            Belum ada transaksi untuk filter yang dipilih.
+          </Text>
         </View>
       ) : (
         <FlatList
@@ -316,45 +491,46 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#1E2A3A',
-    padding: 10,
+    padding: 16,
   },
   title: {
     fontSize: 24,
     fontWeight: 'bold',
     color: '#00FFAA',
     textAlign: 'center',
-    marginBottom: 5,
+    marginBottom: 8,
   },
   subtitle: {
     fontSize: 14,
     color: '#FFD700',
     textAlign: 'center',
-    marginBottom: 20,
+    marginBottom: 16,
   },
   buttonContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 20,
+    marginBottom: 16,
   },
   button: {
     backgroundColor: 'rgba(255, 215, 0, 0.2)',
-    padding: 10,
-    borderRadius: 10,
+    padding: 12,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: '#FFD700',
     flex: 1,
-    marginRight: 5,
+    marginRight: 8,
   },
   actionButton: {
     backgroundColor: '#00FFAA',
-    padding: 10,
-    borderRadius: 10,
+    padding: 12,
+    borderRadius: 8,
     flex: 1,
-    marginLeft: 5,
+    marginLeft: 8,
   },
   buttonText: {
     color: '#FFD700',
     fontSize: 16,
+    fontWeight: 'bold',
     textAlign: 'center',
   },
   buttonSubText: {
@@ -364,39 +540,42 @@ const styles = StyleSheet.create({
   },
   actionButtonText: {
     color: '#1E2A3A',
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: 'bold',
     textAlign: 'center',
   },
   filterContainer: {
     backgroundColor: 'rgba(255, 215, 0, 0.2)',
-    padding: 10,
-    borderRadius: 10,
-    marginBottom: 20,
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
   },
   filterTitle: {
     color: '#FFD700',
     fontSize: 18,
     fontWeight: 'bold',
-    marginBottom: 10,
+    marginBottom: 8,
   },
   filterRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
+    alignItems: 'flex-end',
   },
   filterItem: {
     flex: 1,
-    marginRight: 10,
+    marginRight: 8,
+    minWidth: 100,
   },
   filterLabel: {
     color: '#FFD700',
     fontSize: 14,
-    marginBottom: 5,
+    marginBottom: 4,
   },
   filterInput: {
     backgroundColor: '#2A3441',
-    padding: 5,
-    borderRadius: 5,
+    padding: 8,
+    borderRadius: 4,
     borderWidth: 1,
     borderColor: '#FFD700',
     justifyContent: 'center',
@@ -405,23 +584,23 @@ const styles = StyleSheet.create({
   dateTextInput: {
     color: '#FFD700',
     fontSize: 14,
-    textAlign: 'center',
   },
   pickerContainer: {
     backgroundColor: '#2A3441',
-    borderRadius: 5,
+    borderRadius: 4,
     borderWidth: 1,
     borderColor: '#FFD700',
   },
   picker: {
     color: '#FFD700',
-    height: 30,
+    height: 40,
   },
   resetButton: {
     backgroundColor: '#00FFAA',
-    padding: 10,
-    borderRadius: 10,
+    padding: 8,
+    borderRadius: 8,
     justifyContent: 'center',
+    minWidth: 100,
   },
   resetButtonText: {
     color: '#1E2A3A',
@@ -443,12 +622,13 @@ const styles = StyleSheet.create({
     color: '#FFD700',
     fontSize: 14,
     textAlign: 'center',
+    marginTop: 8,
   },
   transactionCard: {
     backgroundColor: '#2A3441',
-    borderRadius: 10,
-    padding: 15,
-    marginBottom: 15,
+    borderRadius: 8,
+    padding: 16,
+    marginBottom: 16,
     borderWidth: 1,
     borderColor: '#FFD700',
   },
@@ -456,60 +636,92 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     color: '#00FFAA',
-    marginBottom: 5,
+    marginBottom: 8,
   },
   customerText: {
     fontSize: 16,
     color: '#FFD700',
-    marginBottom: 5,
+    marginBottom: 4,
   },
   amountText: {
     fontSize: 16,
     color: '#FFD700',
-    marginBottom: 5,
+    marginBottom: 4,
   },
   paymentText: {
     fontSize: 14,
     color: '#FFD700',
-    marginBottom: 5,
+    marginBottom: 4,
   },
   dateText: {
     fontSize: 14,
     color: '#FFD700',
-    marginBottom: 10,
+    marginBottom: 8,
   },
   itemsContainer: {
     borderTopWidth: 1,
     borderTopColor: '#FFD700',
-    paddingTop: 10,
+    paddingTop: 8,
   },
   itemsTitle: {
     fontSize: 14,
     fontWeight: 'bold',
     color: '#FFD700',
-    marginBottom: 5,
+    marginBottom: 4,
   },
   itemText: {
     fontSize: 14,
     color: '#FFD700',
-    marginBottom: 5,
+    marginBottom: 4,
+  },
+  printButton: {
+    backgroundColor: '#FFD700',
+    padding: 12,
+    borderRadius: 4,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  printButtonDisabled: {
+    backgroundColor: '#FFD70080',
+  },
+  printButtonText: {
+    color: '#1E2A3A',
+    fontSize: 14,
+    fontWeight: 'bold',
   },
   createButton: {
     backgroundColor: '#00FFAA',
-    padding: 15,
-    borderRadius: 10,
-    marginTop: 20,
+    padding: 16,
+    borderRadius: 8,
     alignItems: 'center',
+    marginTop: 16,
   },
   createButtonText: {
     color: '#1E2A3A',
     fontSize: 16,
     fontWeight: 'bold',
   },
+  selectPrinterButton: {
+    backgroundColor: '#FFD700',
+    padding: 12,
+    borderRadius: 4,
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  selectPrinterButtonText: {
+    color: '#1E2A3A',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  loadingText: {
+    color: '#FFD700',
+    fontSize: 16,
+    marginTop: 8,
   },
   errorContainer: {
     flex: 1,
@@ -519,15 +731,15 @@ const styles = StyleSheet.create({
   },
   errorText: {
     fontSize: 16,
-    color: 'red',
+    color: '#FF5555',
     textAlign: 'center',
-    marginBottom: 20,
+    marginBottom: 16,
   },
   retryButton: {
     backgroundColor: '#00FFAA',
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 5,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 4,
   },
   retryButtonText: {
     color: '#1E2A3A',
@@ -536,12 +748,13 @@ const styles = StyleSheet.create({
   },
   datePicker: {
     backgroundColor: '#2A3441',
-    borderRadius: 5,
+    borderRadius: 4,
     borderWidth: 1,
     borderColor: '#FFD700',
+    marginTop: 4,
   },
   listContainer: {
-    paddingBottom: 20,
+    paddingBottom: 80,
   },
 });
 

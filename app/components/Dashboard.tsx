@@ -318,7 +318,7 @@ const Dashboard: React.FC = () => {
         throw new Error('Token tidak ditemukan. Silakan login ulang.');
       }
 
-      const response = await fetch('http://192.168.1.6:8000/api/dashboard', {
+      const response = await fetch('http://192.168.1.8:8000/api/dashboard', {
         method: 'GET',
         headers: {
           Authorization: `Bearer ${token}`,
