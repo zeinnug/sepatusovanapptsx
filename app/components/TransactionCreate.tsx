@@ -21,7 +21,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 type RootStackParamList = {
   Login: undefined;
   Dashboard: undefined;
-  TransactionScreen: undefined;
+  TransactionIndex: undefined;
 };
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -38,7 +38,7 @@ interface Unit {
   selling_price: number;
   discount_price: number | null;
   stock: number;
-  is_active: number; // Tambahkan is_active
+  is_active: number;
 }
 
 interface CartItem {
@@ -70,7 +70,7 @@ interface ApiResponse {
       units: {
         unit_code: string;
         qr_code: string | null;
-        is_active: number; // Tambahkan is_active
+        is_active: number;
       }[];
     }[];
     pagination?: {
@@ -201,7 +201,7 @@ const TransactionCreate: React.FC<Props> = ({ navigation }) => {
         const mappedProducts = validProducts.flatMap((product) => {
           const units = product.units || [];
           return units
-            .filter((unit) => unit.is_active === 1) // Hanya ambil unit aktif
+            .filter((unit) => unit.is_active === 1)
             .map((unit) => ({
               product_id: product.id,
               product_name: product.name,
@@ -216,7 +216,7 @@ const TransactionCreate: React.FC<Props> = ({ navigation }) => {
               unit_code: unit.unit_code || `UNIT-${product.id}`,
               qr_code: unit.qr_code || `http://192.168.1.8:8000/inventory/${product.id}/unit/${unit.unit_code}`,
               stock: product.stock || 0,
-              is_active: unit.is_active, // Tambahkan is_active
+              is_active: unit.is_active,
             }));
         });
 
@@ -246,12 +246,18 @@ const TransactionCreate: React.FC<Props> = ({ navigation }) => {
     }
   }, [navigation]);
 
-  const showPopupMessage = useCallback((title: string, message: string, type: 'success' | 'error') => {
+  const showPopupMessage = useCallback((title: string, message: string, type: 'success' | 'error', navigateOnClose: boolean = false) => {
     setPopupTitle(title);
     setPopupMessage(message);
     setPopupType(type);
     setShowPopup(true);
-  }, []);
+    if (navigateOnClose) {
+      setTimeout(() => {
+        setShowPopup(false);
+        navigation.navigate('TransactionIndex');
+      }, 1000); // Popup displayed for 1 second before navigation
+    }
+  }, [navigation]);
 
   const searchUnits = useCallback(() => {
     if (!searchQuery.trim()) {
@@ -409,9 +415,9 @@ const TransactionCreate: React.FC<Props> = ({ navigation }) => {
         payment_method: paymentMethod,
         card_type: paymentMethod === 'debit' ? cardType : null,
         notes: notes || null,
-        discount_amount: calculateDiscount(), // Gunakan calculateDiscount
+        discount_amount: calculateDiscount(),
         products: cart.map((item) => ({
-          unit_code: item.unit_code.toUpperCase(), // Ubah ke uppercase
+          unit_code: item.unit_code.toUpperCase(),
           discount_price: item.discount_price,
           quantity: item.quantity,
         })),
@@ -431,7 +437,7 @@ const TransactionCreate: React.FC<Props> = ({ navigation }) => {
         throw new Error(response.data.message || 'Gagal membuat transaksi.');
       }
 
-      showPopupMessage('Transaksi Berhasil', 'Transaksi telah berhasil dibuat!', 'success');
+      // Reset state before navigation
       setCart([]);
       setCustomerName('');
       setCustomerPhone('');
@@ -440,11 +446,9 @@ const TransactionCreate: React.FC<Props> = ({ navigation }) => {
       setCardType('');
       setNotes('');
       setNewTotal('');
-      await fetchUnits(); // Refresh data unit setelah transaksi
-      setTimeout(() => {
-        setShowPopup(false);
-        navigation.navigate('TransactionScreen');
-      }, 1500);
+
+      // Show success popup and navigate after closing
+      showPopupMessage('Transaksi Berhasil', 'Transaksi telah berhasil dibuat!', 'success', true);
     } catch (error: unknown) {
       const axiosError = error as AxiosError<ApiErrorResponse>;
       const message =
@@ -471,7 +475,6 @@ const TransactionCreate: React.FC<Props> = ({ navigation }) => {
     calculateDiscount,
     showPopupMessage,
     navigation,
-    fetchUnits,
   ]);
 
   const formatRupiah = useCallback((amount: number): string => {

@@ -79,18 +79,28 @@ const TransactionIndex: React.FC<Props> = ({ navigation }) => {
   const [loading, setLoading] = useState<boolean>(true);
   const [printing, setPrinting] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  const [filterDate, setFilterDate] = useState<Date>(new Date()); // Current date: August 19, 2025
+  const [filterDate, setFilterDate] = useState<Date>(new Date()); // Current date: August 20, 2025
   const [showDatePicker, setShowDatePicker] = useState<boolean>(false);
   const [filterPaymentMethod, setFilterPaymentMethod] = useState<string>('Semua Metode');
   const [filterPaymentStatus, setFilterPaymentStatus] = useState<string>('Semua Status');
   const [selectedPrinter, setSelectedPrinter] = useState<
     { name: string; url: string } | undefined
   >();
+  const [currentTime, setCurrentTime] = useState<Date>(new Date()); // State untuk jam real-time
 
-  const paymentMethods = ['Semua Metode', 'cash', 'qris', 'Transfer Bank'];
+  const paymentMethods = ['Semua Metode', 'cash', 'qris', 'Transfer Bank']; // Perbaiki koma kosong
   const paymentStatuses = ['Semua Status', 'paid', 'unpaid'];
   const WIB_OFFSET = 7 * 60 * 60 * 1000; // UTC+7 in milliseconds
   const API_URL = 'http://192.168.1.8:8000/api/transactions';
+
+  // Update waktu real-time setiap detik
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000); // Perbarui setiap detik
+
+    return () => clearInterval(timer); // Bersihkan interval saat komponen unmount
+  }, []);
 
   // Format date to YYYY-MM-DD in WIB
   const formatDateWIB = (date: Date): string => {
@@ -100,12 +110,24 @@ const TransactionIndex: React.FC<Props> = ({ navigation }) => {
       .padStart(2, '0')}-${wibDate.getUTCDate().toString().padStart(2, '0')}`;
   };
 
-  // Format date for display (dd/MM/yyyy)
+  // Format date and time for display (dd/MM/yyyy HH:mm)
   const formatDisplayDate = (date: Date): string => {
     const wibDate = new Date(date.getTime() + WIB_OFFSET);
-    return `${wibDate.getUTCDate().toString().padStart(2, '0')}/${(wibDate.getUTCMonth() + 1)
-      .toString()
-      .padStart(2, '0')}/${wibDate.getUTCFullYear()}`;
+    const day = wibDate.getUTCDate().toString().padStart(2, '0');
+    const month = (wibDate.getUTCMonth() + 1).toString().padStart(2, '0');
+    const year = wibDate.getUTCFullYear();
+    const hours = wibDate.getUTCHours().toString().padStart(2, '0');
+    const minutes = wibDate.getUTCMinutes().toString().padStart(2, '0');
+    return `${day}/${month}/${year} ${hours}:${minutes}`;
+  };
+
+  // Format invoice number (INV-DDMMYYYY)
+  const formatInvoiceNumber = (date: string): string => {
+    const wibDate = new Date(new Date(date).getTime() + WIB_OFFSET);
+    const day = wibDate.getUTCDate().toString().padStart(2, '0');
+    const month = (wibDate.getUTCMonth() + 1).toString().padStart(2, '0');
+    const year = wibDate.getUTCFullYear().toString();
+    return `INV-${day}${month}${year}`;
   };
 
   // Fetch transactions
@@ -150,8 +172,12 @@ const TransactionIndex: React.FC<Props> = ({ navigation }) => {
 
       if (result.success) {
         console.log('Raw transactions:', result.data.transactions.length);
-        // Temporarily use raw data to debug
-        setTransactions(result.data.transactions);
+        // Format invoice numbers for each transaction
+        const formattedTransactions = result.data.transactions.map(transaction => ({
+          ...transaction,
+          invoice_number: formatInvoiceNumber(transaction.created_at)
+        }));
+        setTransactions(formattedTransactions);
       } else {
         throw new Error(result.message || 'Failed to fetch transactions');
       }
@@ -159,6 +185,7 @@ const TransactionIndex: React.FC<Props> = ({ navigation }) => {
       const errorMessage = err instanceof Error ? err.message : 'Unknown error';
       console.error('Fetch error:', errorMessage);
       setError(`Error fetching transactions: ${errorMessage}`);
+      Alert.alert('Error', `Error fetching transactions: ${errorMessage}`);
     } finally {
       setLoading(false);
     }
@@ -209,15 +236,11 @@ const TransactionIndex: React.FC<Props> = ({ navigation }) => {
             <div class="line"></div>
             <div class="row">
               <span class="label">Invoice:</span>
-              <span>${transaction.invoice_number}</span>
+              <span>${formatInvoiceNumber(transaction.created_at)}</span>
             </div>
             <div class="row">
               <span class="label">Date:</span>
-              <span>${formatDisplayDate(new Date(transaction.created_at))} ${new Date(
-        transaction.created_at
-      )
-        .toISOString()
-        .slice(11, 16)}</span>
+              <span>${formatDisplayDate(new Date(transaction.created_at))}</span>
             </div>
             <div class="row">
               <span class="label">Cashier:</span>
@@ -318,14 +341,14 @@ const TransactionIndex: React.FC<Props> = ({ navigation }) => {
 
   const renderTransaction = ({ item }: { item: Transaction }) => (
     <View style={styles.transactionCard}>
-      <Text style={styles.invoiceText}>{item.invoice_number}</Text>
+      <Text style={styles.invoiceText}>{formatInvoiceNumber(item.created_at)}</Text>
       <Text style={styles.customerText}>Customer: {item.customer_name}</Text>
       <Text style={styles.amountText}>
         Total: Rp {item.final_amount.toLocaleString('id-ID')}
       </Text>
       <Text style={styles.paymentText}>Payment: {item.payment_method}</Text>
       <Text style={styles.dateText}>
-        Date: {formatDisplayDate(new Date(item.created_at))} {item.created_at.slice(11, 16)}
+        Date: {formatDisplayDate(new Date(item.created_at))}
       </Text>
       <View style={styles.itemsContainer}>
         <Text style={styles.itemsTitle}>Items:</Text>
@@ -379,6 +402,9 @@ const TransactionIndex: React.FC<Props> = ({ navigation }) => {
     <View style={styles.container}>
       <Text style={styles.title}>SEPATU BY SOVAN</Text>
       <Text style={styles.subtitle}>Luxury Footwear Collection</Text>
+      <Text style={styles.currentTimeText}>
+        Waktu Saat Ini: {formatDisplayDate(currentTime)}
+      </Text>
       <View style={styles.buttonContainer}>
         <TouchableOpacity style={styles.button}>
           <Text style={styles.buttonText}>SISTEM KASIR</Text>
@@ -502,6 +528,12 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     fontSize: 14,
+    color: '#FFD700',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  currentTimeText: {
+    fontSize: 16,
     color: '#FFD700',
     textAlign: 'center',
     marginBottom: 16,

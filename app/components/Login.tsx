@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ActivityIndicator, StyleSheet, Dimensions, ImageBackground } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, TextInput, TouchableOpacity, ActivityIndicator, StyleSheet, Dimensions, ImageBackground, KeyboardAvoidingView, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -35,7 +35,28 @@ const Login: React.FC = () => {
   const [error, setError] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
   const [showPassword, setShowPassword] = useState<boolean>(false);
+  const [rememberMe, setRememberMe] = useState<boolean>(false);
   const navigation = useNavigation<LoginNavigationProp>();
+
+  // Load saved credentials on component mount
+  useEffect(() => {
+    const loadCredentials = async () => {
+      try {
+        const savedEmail = await AsyncStorage.getItem('savedEmail');
+        const savedPassword = await AsyncStorage.getItem('savedPassword');
+        const savedRememberMe = await AsyncStorage.getItem('rememberMe');
+
+        if (savedEmail && savedPassword && savedRememberMe === 'true') {
+          setEmail(savedEmail);
+          setPassword(savedPassword);
+          setRememberMe(true);
+        }
+      } catch (err) {
+        console.error('Error loading credentials:', err);
+      }
+    };
+    loadCredentials();
+  }, []);
 
   const handleLogin = async () => {
     setLoading(true);
@@ -60,6 +81,19 @@ const Login: React.FC = () => {
         console.log(data.user); // Data user: id, nama, email, role
         await AsyncStorage.setItem('token', data.token);
         await AsyncStorage.setItem('user', JSON.stringify(data.user));
+
+        // Save credentials if "Remember Me" is checked
+        if (rememberMe) {
+          await AsyncStorage.setItem('savedEmail', email);
+          await AsyncStorage.setItem('savedPassword', password);
+          await AsyncStorage.setItem('rememberMe', 'true');
+        } else {
+          // Clear saved credentials if "Remember Me" is unchecked
+          await AsyncStorage.removeItem('savedEmail');
+          await AsyncStorage.removeItem('savedPassword');
+          await AsyncStorage.removeItem('rememberMe');
+        }
+
         navigation.navigate('Dashboard');
       } else {
         throw new Error(data.pesan || 'Login gagal');
@@ -73,7 +107,11 @@ const Login: React.FC = () => {
   };
 
   return (
-    <View style={styles.container}>
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+    >
       <ImageBackground source={require('../../assets/bglogin.png')} style={styles.backgroundImage}>
         <View style={styles.loginCard}>
           <View style={styles.brandCircle}>
@@ -81,7 +119,7 @@ const Login: React.FC = () => {
           </View>
           <Text style={styles.loginTitle}>LOGIN</Text>
           <Text style={styles.welcomeText}>Welcome back! Please login to your account</Text>
-          
+
           <Text style={styles.fieldLabel}>Username</Text>
           <TextInput
             style={styles.input}
@@ -103,7 +141,7 @@ const Login: React.FC = () => {
               onChangeText={setPassword}
               secureTextEntry={!showPassword}
             />
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.eyeIcon}
               onPress={() => setShowPassword(!showPassword)}
             >
@@ -111,15 +149,27 @@ const Login: React.FC = () => {
             </TouchableOpacity>
           </View>
 
+          <View style={styles.rememberMeContainer}>
+            <TouchableOpacity
+              style={[styles.checkbox, rememberMe && styles.checkboxChecked]}
+              onPress={() => setRememberMe(!rememberMe)}
+            >
+              {rememberMe && <Text style={styles.checkboxText}>✓</Text>}
+            </TouchableOpacity>
+            <Text style={styles.rememberMeText}>Remember Me</Text>
+          </View>
+
           {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
           <TouchableOpacity style={styles.forgotPassword}>
-            <Text style={styles.forgotText}>Lupa sandi? <Text style={styles.clickHere}>Klik disini</Text></Text>
+            <Text style={styles.forgotText}>
+              Lupa sandi? <Text style={styles.clickHere}>Klik disini</Text>
+            </Text>
           </TouchableOpacity>
 
-          <TouchableOpacity 
-            style={[styles.loginButton, loading && styles.loginButtonDisabled]} 
-            onPress={handleLogin} 
+          <TouchableOpacity
+            style={[styles.loginButton, loading && styles.loginButtonDisabled]}
+            onPress={handleLogin}
             disabled={loading}
           >
             <Text style={styles.loginButtonText}>
@@ -129,7 +179,7 @@ const Login: React.FC = () => {
           </TouchableOpacity>
         </View>
       </ImageBackground>
-    </View>
+    </KeyboardAvoidingView>
   );
 };
 
@@ -228,6 +278,36 @@ const styles = StyleSheet.create({
   eyeText: {
     fontSize: 18,
     color: '#FF6B35',
+  },
+  rememberMeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    marginBottom: 15,
+    marginLeft: 5,
+  },
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderWidth: 2,
+    borderColor: '#8892B0',
+    borderRadius: 4,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 8,
+  },
+  checkboxChecked: {
+    backgroundColor: '#FF6B35',
+    borderColor: '#FF6B35',
+  },
+  checkboxText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  rememberMeText: {
+    fontSize: 14,
+    color: '#8892B0',
   },
   errorText: {
     fontSize: 14,
