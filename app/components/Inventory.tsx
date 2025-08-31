@@ -83,7 +83,7 @@ const ProductItem = React.memo(({ item, index, onEdit, onDelete, showBrandHeader
   const unitCode = unit.unit_code || '-';
   const qrCodeData = unit.qr_code && isValidUrl(unit.qr_code)
     ? unit.qr_code
-    : `http://192.168.1.8:8000/inventory/${item.id}/unit/${unitCode}`;
+    : `https://testingaplikasi.tokosepatusovan.com/inventory/${item.id}/unit/${unitCode}`;
   const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${encodeURIComponent(qrCodeData)}&t=${Date.now()}`;
 
   return (
@@ -207,7 +207,7 @@ export default function InventoryScreen() {
         let success = false;
         while (retries < maxRetries && !success) {
           try {
-            const url = new URL('http://192.168.1.8:8000/api/products/');
+            const url = new URL('https://testingaplikasi.tokosepatusovan.com/api/products');
             if (search) url.searchParams.set('search', search);
             if (size) url.searchParams.set('size', size);
             url.searchParams.set('page', currentApiPage.toString());
@@ -339,7 +339,7 @@ export default function InventoryScreen() {
       const [brand, ...modelParts] = sanitizeString(state.editItem.name).split(' ');
       const model = modelParts.join(' ') || '';
 
-      const response = await fetch(`http://192.168.1.8:8000/api/products/${state.editItem.id}/`, {
+      const response = await fetch(`https://testingaplikasi.tokosepatusovan.com/api/products/${state.editItem.id}/`, {
         method: 'PUT',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -398,7 +398,7 @@ export default function InventoryScreen() {
                 return;
               }
 
-              const response = await fetch(`http://192.168.1.8:8000/api/products/${id}/`, {
+              const response = await fetch(`https://testingaplikasi.tokosepatusovan.com/api/products/${id}/`, {
                 method: 'DELETE',
                 headers: {
                   Authorization: `Bearer ${token}`,
@@ -546,7 +546,6 @@ export default function InventoryScreen() {
         <TouchableOpacity style={styles.actionButton} onPress={handleSearch}>
           <Text style={styles.actionButtonText}>Cari</Text>
         </TouchableOpacity>
-
       </View>
 
       {/* Edit Form */}

@@ -310,7 +310,7 @@ const Dashboard: React.FC = () => {
     );
   });
 
-  // Fetch data from API with change detection
+  // Fetch data from API with change detection for transactions
   const fetchData = useCallback(async () => {
     try {
       const token = await AsyncStorage.getItem('token');
@@ -318,20 +318,31 @@ const Dashboard: React.FC = () => {
         throw new Error('Token tidak ditemukan. Silakan login ulang.');
       }
 
-      const response = await fetch('http://192.168.1.8:8000/api/dashboard', {
+      const response = await fetch('https://testingaplikasi.tokosepatusovan.com/api/dashboard', {
         method: 'GET',
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
+          'Accept': 'application/json',
         },
       });
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.data?.message || `Gagal mengambil data dari API: ${response.status}`);
+      // Debugging: Log raw response
+      console.log('Status:', response.status);
+      const text = await response.text();
+      console.log('Raw Response:', text);
+
+      let data: DashboardResponse;
+      try {
+        data = JSON.parse(text);
+      } catch (parseError) {
+        throw new Error('Server tidak mengembalikan JSON valid: ' + text.slice(0, 100));
       }
 
-      const data: DashboardResponse = await response.json();
+      if (!response.ok) {
+        throw new Error(data.data?.message || `Gagal mengambil data dari API: ${response.status}`);
+      }
+
       const newData = data.data || {};
 
       // Parse data for comparison and state
@@ -351,23 +362,27 @@ const Dashboard: React.FC = () => {
         })),
       };
 
-      // Compare with previous data
-      if (JSON.stringify(prevDataRef.current) === JSON.stringify(newData)) {
-        return; // Skip state updates if data hasn't changed
-      }
+      // Compare recent transactions to detect new ones
+      const prevTransactions = prevDataRef.current?.recent_transactions || [];
+      const newTransactions = parsedData.recent_transactions;
+      const hasNewTransactions =
+        prevTransactions.length !== newTransactions.length ||
+        !prevTransactions.every((prev, index) => prev.id === newTransactions[index]?.id);
 
       // Update previous data reference
       prevDataRef.current = newData;
 
-      // Update state only if data has changed
-      setTotalUnits(parsedData.total_products);
-      setTotalTransactions(parsedData.total_transactions);
-      setTotalSales(parsedData.total_sales);
-      setHourlyData(parsedData.hourly_data);
-      setHourlyLabels(parsedData.labels);
-      setTopProducts(parsedData.top_products);
-      setRecentTransactions(parsedData.recent_transactions);
-      setLoading(false);
+      // Only update state if there are new transactions or this is the first fetch
+      if (hasNewTransactions || loading) {
+        setTotalUnits(parsedData.total_products);
+        setTotalTransactions(parsedData.total_transactions);
+        setTotalSales(parsedData.total_sales);
+        setHourlyData(parsedData.hourly_data);
+        setHourlyLabels(parsedData.labels);
+        setTopProducts(parsedData.top_products);
+        setRecentTransactions(parsedData.recent_transactions);
+        setLoading(false);
+      }
     } catch (err: unknown) {
       const errorMsg =
         err instanceof Error
@@ -379,7 +394,7 @@ const Dashboard: React.FC = () => {
       setLoading(false);
       Alert.alert('Error', errorMsg, [{ text: 'OK', onPress: () => navigation.replace('Login') }]);
     }
-  }, [navigation]);
+  }, [navigation, loading]);
 
   // Polling every 5 seconds
   useEffect(() => {

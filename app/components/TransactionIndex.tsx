@@ -91,7 +91,7 @@ const TransactionIndex: React.FC<Props> = ({ navigation }) => {
   const paymentMethods = ['Semua Metode', 'cash', 'qris', 'Transfer Bank']; // Perbaiki koma kosong
   const paymentStatuses = ['Semua Status', 'paid', 'unpaid'];
   const WIB_OFFSET = 7 * 60 * 60 * 1000; // UTC+7 in milliseconds
-  const API_URL = 'http://192.168.1.8:8000/api/transactions';
+  const API_URL = 'https://testingaplikasi.tokosepatusovan.com/api/transactions/';
 
   // Update waktu real-time setiap detik
   useEffect(() => {
