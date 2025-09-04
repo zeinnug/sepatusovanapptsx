@@ -54,9 +54,8 @@ const Dashboard: React.FC = () => {
   const slideAnim = useState(new Animated.Value(-300))[0];
   const fadeAnim = useState(new Animated.Value(0))[0];
   const navigation = useNavigation<DashboardNavigationProp>();
-  const prevDataRef = useRef<DashboardResponse['data'] | null>(null); // Store previous API data
+  const prevDataRef = useRef<DashboardResponse['data'] | null>(null);
 
-  // Update current time every minute
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(new Date());
@@ -64,7 +63,6 @@ const Dashboard: React.FC = () => {
     return () => clearInterval(timer);
   }, []);
 
-  // Animated Number Component
   const AnimatedNumber: React.FC<{ value: number; isCurrency?: boolean }> = memo(({ value, isCurrency = false }) => {
     const [displayValue, setDisplayValue] = useState(0);
 
@@ -95,7 +93,6 @@ const Dashboard: React.FC = () => {
     );
   });
 
-  // StatCard Component
   const StatCard: React.FC<{ title: string; value: number; icon: string; delay?: number }> = memo(({ title, value, icon, delay = 0 }) => {
     const [isVisible, setIsVisible] = useState(false);
 
@@ -137,7 +134,6 @@ const Dashboard: React.FC = () => {
     );
   });
 
-  // SimpleBarChart Component
   const SimpleBarChart: React.FC<{ data: number[]; labels: string[]; title: string; subtitle: string }> = memo(({ data, labels, title, subtitle }) => {
     const maxValue = Math.max(...data, 1);
     const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD'];
@@ -182,7 +178,6 @@ const Dashboard: React.FC = () => {
     );
   });
 
-  // SimplePieChart Component
   const SimplePieChart: React.FC<{ data: { name: string; quantity: number }[]; title: string; subtitle: string }> = memo(({ data, title, subtitle }) => {
     const total = data.reduce((sum, item) => sum + item.quantity, 0);
     const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7'];
@@ -213,7 +208,6 @@ const Dashboard: React.FC = () => {
     );
   });
 
-  // TransactionTable Component
   const TransactionTable: React.FC<{
     transactions: { id: number; created_at: string; user: { name: string }; items: { product: { name: string } }[]; final_amount: number; status: string }[];
   }> = memo(({ transactions }) => {
@@ -227,10 +221,8 @@ const Dashboard: React.FC = () => {
       status: width * 0.15,
     };
 
-    // Calculate total table width
     const totalTableWidth = Object.values(cellWidths).reduce((sum, val) => sum + val, 0);
 
-    // Parse and format date (e.g., "09-08-2025 22:24" to "09 Aug 2025, 22:24")
     const formatDate = (dateString: string) => {
       try {
         const [day, month, year, time] = dateString.split(/[- ]/);
@@ -247,7 +239,6 @@ const Dashboard: React.FC = () => {
       }
     };
 
-    // Format currency
     const formatCurrency = (amount: number) => {
       return amount.toLocaleString('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0, maximumFractionDigits: 0 });
     };
@@ -310,7 +301,6 @@ const Dashboard: React.FC = () => {
     );
   });
 
-  // Fetch data from API with change detection for transactions
   const fetchData = useCallback(async () => {
     try {
       const token = await AsyncStorage.getItem('token');
@@ -327,7 +317,6 @@ const Dashboard: React.FC = () => {
         },
       });
 
-      // Debugging: Log raw response
       console.log('Status:', response.status);
       const text = await response.text();
       console.log('Raw Response:', text);
@@ -345,7 +334,6 @@ const Dashboard: React.FC = () => {
 
       const newData = data.data || {};
 
-      // Parse data for comparison and state
       const parsedData = {
         total_products: newData.total_products || 0,
         total_transactions: newData.total_transactions || 0,
@@ -362,17 +350,14 @@ const Dashboard: React.FC = () => {
         })),
       };
 
-      // Compare recent transactions to detect new ones
       const prevTransactions = prevDataRef.current?.recent_transactions || [];
       const newTransactions = parsedData.recent_transactions;
       const hasNewTransactions =
         prevTransactions.length !== newTransactions.length ||
         !prevTransactions.every((prev, index) => prev.id === newTransactions[index]?.id);
 
-      // Update previous data reference
       prevDataRef.current = newData;
 
-      // Only update state if there are new transactions or this is the first fetch
       if (hasNewTransactions || loading) {
         setTotalUnits(parsedData.total_products);
         setTotalTransactions(parsedData.total_transactions);
@@ -396,14 +381,12 @@ const Dashboard: React.FC = () => {
     }
   }, [navigation, loading]);
 
-  // Polling every 5 seconds
   useEffect(() => {
     fetchData();
     const interval = setInterval(fetchData, 5000);
     return () => clearInterval(interval);
   }, [fetchData]);
 
-  // Menu and card animations
   useEffect(() => {
     Animated.timing(slideAnim, {
       toValue: menuVisible ? 0 : -300,
@@ -428,7 +411,6 @@ const Dashboard: React.FC = () => {
     setMenuVisible(false);
   };
 
-  // Filter hourly data up to current hour
   const filteredHourlyData = useMemo(() => {
     const currentHour = currentTime.getHours();
     return hourlyData.slice(0, currentHour + 1).filter(data => data > 0);
@@ -461,10 +443,10 @@ const Dashboard: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      {/* Hero Section */}
       <ImageBackground
         source={{ uri: 'https://images.unsplash.com/photo-1556906781-9a412961c28c?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2574&q=80' }}
         style={styles.heroSection}
+        imageStyle={{ resizeMode: 'cover' }}
       >
         <View style={styles.heroOverlay} />
         <Animated.View
@@ -483,7 +465,6 @@ const Dashboard: React.FC = () => {
         </TouchableOpacity>
       </ImageBackground>
 
-      {/* Main Content */}
       <ScrollView style={styles.content}>
         <Text style={styles.sectionTitle}>LAPORAN HARIAN</Text>
         <Animated.View style={[styles.cardContainer, { opacity: fadeAnim }]}>
@@ -509,7 +490,6 @@ const Dashboard: React.FC = () => {
         <TransactionTable transactions={recentTransactions} />
       </ScrollView>
 
-      {/* Menu Modal */}
       <Modal animationType="none" transparent={true} visible={menuVisible} onRequestClose={() => setMenuVisible(false)}>
         <View style={styles.modalOverlay}>
           <Animated.View style={[styles.modalContainer, { transform: [{ translateX: slideAnim }] }]}>
@@ -599,7 +579,7 @@ const styles = StyleSheet.create({
   },
   heroOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    backgroundColor: 'rgba(0, 0, 0, 0.2)', // Reduced opacity for clearer image
   },
   heroTextContainer: {
     position: 'absolute',
@@ -609,17 +589,20 @@ const styles = StyleSheet.create({
     bottom: 0,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)', // More transparent background
     paddingVertical: 16,
     paddingHorizontal: 32,
     borderRadius: 8,
   },
   heroText: {
-    color: '#F97316',
-    fontSize: 20,
-    fontWeight: '700',
+    color: '#FFFFFF', // Changed to white for better contrast
+    fontSize: 22, // Slightly larger for emphasis
+    fontWeight: '800',
     fontFamily: 'serif',
     textAlign: 'center',
+    textShadowColor: 'rgba(0, 0, 0, 0.75)', // Added text shadow for readability
+    textShadowOffset: { width: -1, height: 1 },
+    textShadowRadius: 4,
   },
   hamburgerButton: {
     position: 'absolute',
