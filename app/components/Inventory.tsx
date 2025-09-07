@@ -8,9 +8,9 @@ import {
   Alert,
   Image,
   TouchableOpacity,
-  ScrollView,
   ActivityIndicator,
   Dimensions,
+  Platform,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { debounce } from 'lodash';
@@ -48,6 +48,11 @@ interface InventoryState {
   errorMessage: string;
   currentPage: number;
 }
+
+// Cache settings
+const CACHE_KEY = 'inventory_products';
+const CACHE_TIMESTAMP_KEY = 'inventory_cache_timestamp';
+const CACHE_VALIDITY_DURATION = 5 * 60 * 1000; // 5 minutes in milliseconds
 
 // Komponen untuk item produk dengan memoization
 const ProductItem = React.memo(({ item, index, onEdit, onDelete, showBrandHeader }: {
@@ -87,50 +92,79 @@ const ProductItem = React.memo(({ item, index, onEdit, onDelete, showBrandHeader
   const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${encodeURIComponent(qrCodeData)}&t=${Date.now()}`;
 
   return (
-    <View>
+    <View style={styles.cardContainer}>
       {showBrandHeader && (
         <Text style={styles.brandHeader}>{brand.toUpperCase()}</Text>
       )}
-      <View style={[styles.item, index % 2 === 0 ? styles.itemEven : styles.itemOdd]}>
-        <Text style={[styles.itemText, styles.itemNo]}>{rowNumber}</Text>
-        <View style={[styles.itemTextContainer, styles.itemBrand]}>
-          <Text style={styles.itemText} numberOfLines={1} ellipsizeMode="tail">{brand.toUpperCase()}</Text>
+      <View style={styles.productCard}>
+        <View style={styles.cardRow}>
+          <Text style={styles.cardLabel}>No:</Text>
+          <Text style={styles.cardValue}>{rowNumber}</Text>
         </View>
-        <View style={[styles.itemTextContainer, styles.itemModel]}>
-          <Text style={styles.itemText} numberOfLines={1} ellipsizeMode="tail">{model.toUpperCase()}</Text>
+        <View style={styles.cardRow}>
+          <Text style={styles.cardLabel}>Brand:</Text>
+          <Text style={styles.cardValue} numberOfLines={1} ellipsizeMode="tail">{brand.toUpperCase()}</Text>
         </View>
-        <Text style={[styles.itemText, styles.itemSize]} numberOfLines={1} ellipsizeMode="tail">{item.size || '-'}</Text>
-        <Text style={[styles.itemText, styles.itemColor]} numberOfLines={1} ellipsizeMode="tail">{item.color ? item.color.toUpperCase() : '-'}</Text>
-        <Text style={[styles.itemText, styles.itemStock, stock < 5 ? styles.lowStock : null]}>{stock}</Text>
-        <Text style={[styles.itemText, styles.itemPhysical]}>{physicalStock}</Text>
-        <Text style={[styles.itemText, styles.itemPrice]} numberOfLines={1} ellipsizeMode="tail">
-          Rp {new Intl.NumberFormat('id-ID').format(parseFloat(item.selling_price) || 0)}
-        </Text>
-        <Text style={[styles.itemText, styles.itemDiscount]} numberOfLines={1} ellipsizeMode="tail">
-          {item.discount_price ? `Rp ${new Intl.NumberFormat('id-ID').format(parseFloat(item.discount_price))}` : '-'}
-        </Text>
-        <TouchableOpacity onPress={() => setShowQR(!showQR)} style={styles.qrToggle}>
-          <Text style={styles.qrToggleText}>{showQR ? 'Sembunyikan QR' : 'Tampilkan QR'}</Text>
-        </TouchableOpacity>
-        <View style={styles.actions}>
-          <TouchableOpacity onPress={() => onEdit(item)}>
-            <Text style={styles.actionText}>Edit</Text>
+        <View style={styles.cardRow}>
+          <Text style={styles.cardLabel}>Model:</Text>
+          <Text style={styles.cardValue} numberOfLines={1} ellipsizeMode="tail">{model.toUpperCase()}</Text>
+        </View>
+        <View style={styles.cardRow}>
+          <Text style={styles.cardLabel}>Ukuran:</Text>
+          <Text style={styles.cardValue} numberOfLines={1} ellipsizeMode="tail">{item.size || '-'}</Text>
+        </View>
+        <View style={styles.cardRow}>
+          <Text style={styles.cardLabel}>Warna:</Text>
+          <Text style={styles.cardValue} numberOfLines={1} ellipsizeMode="tail">{item.color ? item.color.toUpperCase() : '-'}</Text>
+        </View>
+        <View style={styles.cardRow}>
+          <Text style={styles.cardLabel}>Stok:</Text>
+          <Text style={[styles.cardValue, stock < 5 ? styles.lowStock : null]}>{stock}</Text>
+        </View>
+        <View style={styles.cardRow}>
+          <Text style={styles.cardLabel}>Fisik:</Text>
+          <Text style={styles.cardValue}>{physicalStock}</Text>
+        </View>
+        <View style={styles.cardRow}>
+          <Text style={styles.cardLabel}>Harga:</Text>
+          <Text style={styles.cardValue} numberOfLines={1} ellipsizeMode="tail">
+            Rp {new Intl.NumberFormat('id-ID').format(parseFloat(item.selling_price) || 0)}
+          </Text>
+        </View>
+        <View style={styles.cardRow}>
+          <Text style={styles.cardLabel}>Diskon:</Text>
+          <Text style={styles.cardValue} numberOfLines={1} ellipsizeMode="tail">
+            {item.discount_price ? `Rp ${new Intl.NumberFormat('id-ID').format(parseFloat(item.discount_price))}` : '-'}
+          </Text>
+        </View>
+        <View style={styles.cardRow}>
+          <Text style={styles.cardLabel}>QR:</Text>
+          <TouchableOpacity onPress={() => setShowQR(!showQR)}>
+            <Text style={styles.qrToggleText}>{showQR ? 'Sembunyikan QR' : 'Tampilkan QR'}</Text>
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => onDelete(item.id)}>
-            <Text style={[styles.actionText, { color: '#ef4444' }]}>Hapus</Text>
-          </TouchableOpacity>
         </View>
+        <View style={styles.cardRow}>
+          <Text style={styles.cardLabel}>Aksi:</Text>
+          <View style={styles.actions}>
+            <TouchableOpacity onPress={() => onEdit(item)}>
+              <Text style={styles.actionText}>Edit</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => onDelete(item.id)}>
+              <Text style={[styles.actionText, { color: '#DC2626' }]}>Hapus</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+        {showQR && (
+          <View style={styles.qrContainer}>
+            <Text style={styles.qrUnitCode}>Kode Unit: {unitCode}</Text>
+            <Image
+              source={{ uri: qrCodeUrl }}
+              style={styles.qrCode}
+              onError={(e) => console.error(`Gagal memuat QR code untuk produk ${item.id}: ${e.nativeEvent.error}`)}
+            />
+          </View>
+        )}
       </View>
-      {showQR && (
-        <View style={styles.qrContainer}>
-          <Text style={styles.qrUnitCode}>Kode Unit: {unitCode}</Text>
-          <Image
-            source={{ uri: qrCodeUrl }}
-            style={styles.qrCode}
-            onError={(e) => console.error(`Gagal memuat QR code untuk produk ${item.id}: ${e.nativeEvent.error}`)}
-          />
-        </View>
-      )}
     </View>
   );
 });
@@ -166,19 +200,77 @@ export default function InventoryScreen() {
     setState((prev) => ({ ...prev, brandCounts: counts }));
   }, [sanitizeString]);
 
+  // Save state to AsyncStorage
+  const saveStateToStorage = useCallback(async () => {
+    try {
+      await AsyncStorage.setItem('inventory_state', JSON.stringify({
+        searchTerm: state.searchTerm,
+        sizeTerm: state.sizeTerm,
+        selectedBrand: state.selectedBrand,
+        currentPage: state.currentPage,
+      }));
+    } catch (error) {
+      console.error('Gagal menyimpan state ke AsyncStorage:', error);
+    }
+  }, [state.searchTerm, state.sizeTerm, state.selectedBrand, state.currentPage]);
+
+  // Load state from AsyncStorage
+  const loadStateFromStorage = useCallback(async () => {
+    try {
+      const savedState = await AsyncStorage.getItem('inventory_state');
+      if (savedState) {
+        const parsedState = JSON.parse(savedState);
+        setState((prev) => ({
+          ...prev,
+          searchTerm: parsedState.searchTerm || '',
+          sizeTerm: parsedState.sizeTerm || '',
+          selectedBrand: parsedState.selectedBrand || 'all',
+          currentPage: parsedState.currentPage || 1,
+        }));
+      }
+    } catch (error) {
+      console.error('Gagal memuat state dari AsyncStorage:', error);
+    }
+  }, []);
+
+  // Save products to AsyncStorage
+  const saveProductsToStorage = useCallback(async (products: InventoryItem[]) => {
+    try {
+      await AsyncStorage.setItem(CACHE_KEY, JSON.stringify(products));
+      await AsyncStorage.setItem(CACHE_TIMESTAMP_KEY, Date.now().toString());
+    } catch (error) {
+      console.error('Gagal menyimpan produk ke AsyncStorage:', error);
+    }
+  }, []);
+
+  // Load products from AsyncStorage
+  const loadProductsFromStorage = useCallback(async () => {
+    try {
+      const cachedProducts = await AsyncStorage.getItem(CACHE_KEY);
+      const timestamp = await AsyncStorage.getItem(CACHE_TIMESTAMP_KEY);
+      if (cachedProducts && timestamp) {
+        const age = Date.now() - parseInt(timestamp, 10);
+        if (age < CACHE_VALIDITY_DURATION) {
+          const products = JSON.parse(cachedProducts);
+          if (Array.isArray(products)) {
+            setState((prev) => ({ ...prev, products, isLoading: false }));
+            updateBrandCounts(products);
+            return true;
+          }
+        }
+      }
+      return false;
+    } catch (error) {
+      console.error('Gagal memuat produk dari AsyncStorage:', error);
+      return false;
+    }
+  }, [updateBrandCounts]);
+
   // Clear cache
   const clearCache = useCallback(async () => {
     try {
-      await AsyncStorage.removeItem('cache_valid');
-      const cacheKey = 'all_products';
-      const count = await AsyncStorage.getItem(`${cacheKey}_count`);
-      if (count) {
-        const total = parseInt(count, 10);
-        for (let i = 0; i < total; i += 500) {
-          await AsyncStorage.removeItem(`${cacheKey}_${i}`);
-        }
-        await AsyncStorage.removeItem(`${cacheKey}_count`);
-      }
+      await AsyncStorage.removeItem(CACHE_KEY);
+      await AsyncStorage.removeItem(CACHE_TIMESTAMP_KEY);
       console.log('Cache AsyncStorage berhasil dibersihkan');
     } catch (error) {
       console.error('Gagal membersihkan cache:', error);
@@ -258,7 +350,8 @@ export default function InventoryScreen() {
         setState((prev) => ({ ...prev, isLoading: false, errorMessage: 'Tidak ada produk ditemukan.' }));
       } else {
         setState((prev) => ({ ...prev, products: allProducts, isLoading: false }));
-        await clearCache();
+        await saveProductsToStorage(allProducts);
+        updateBrandCounts(allProducts);
       }
     } catch (error) {
       setState((prev) => ({
@@ -268,7 +361,7 @@ export default function InventoryScreen() {
       }));
       Alert.alert('Error', 'Tidak dapat memuat data inventaris. Silakan coba lagi nanti.');
     }
-  }, [clearCache]);
+  }, [saveProductsToStorage, updateBrandCounts]);
 
   // Filter products
   const filteredProducts = useMemo(() => {
@@ -319,7 +412,8 @@ export default function InventoryScreen() {
   const handleSearch = useCallback(() => {
     setState((prev) => ({ ...prev, currentPage: 1 }));
     debouncedSearch(state.searchTerm, state.sizeTerm);
-  }, [state.searchTerm, state.sizeTerm, debouncedSearch]);
+    saveStateToStorage();
+  }, [state.searchTerm, state.sizeTerm, debouncedSearch, saveStateToStorage]);
 
   // Update product
   const handleUpdateItem = useCallback(async () => {
@@ -372,13 +466,14 @@ export default function InventoryScreen() {
         currentPage: 1,
         errorMessage: '',
       }));
+      await saveProductsToStorage(state.products);
       Alert.alert('Sukses', 'Produk berhasil diperbarui.');
       await clearCache();
       await fetchAllProducts();
     } catch (error) {
       Alert.alert('Error', (error as Error).message || 'Gagal memperbarui produk.');
     }
-  }, [state.editItem, sanitizeString, clearCache, fetchAllProducts]);
+  }, [state.editItem, sanitizeString, clearCache, fetchAllProducts, saveProductsToStorage]);
 
   // Delete product
   const handleDeleteItem = useCallback((id: number) => {
@@ -413,12 +508,14 @@ export default function InventoryScreen() {
                 throw new Error(`Gagal menghapus produk: ${response.status} ${errorText}`);
               }
 
+              const updatedProducts = state.products.filter((p) => p.id !== id);
               setState((prev) => ({
                 ...prev,
-                products: prev.products.filter((p) => p.id !== id),
+                products: updatedProducts,
                 currentPage: 1,
                 errorMessage: '',
               }));
+              await saveProductsToStorage(updatedProducts);
               Alert.alert('Sukses', 'Produk berhasil dihapus.');
               await clearCache();
               await fetchAllProducts();
@@ -429,91 +526,106 @@ export default function InventoryScreen() {
         },
       ]
     );
-  }, [clearCache, fetchAllProducts]);
+  }, [clearCache, fetchAllProducts, state.products, saveProductsToStorage]);
 
   // Sync on focus
   useFocusEffect(
     useCallback(() => {
       const checkAndSync = async () => {
-        await clearCache();
-        await fetchAllProducts();
+        await loadStateFromStorage();
+        const cacheLoaded = await loadProductsFromStorage();
+        if (!cacheLoaded) {
+          await clearCache();
+          await fetchAllProducts();
+        }
       };
       checkAndSync();
-    }, [clearCache, fetchAllProducts])
+    }, [clearCache, fetchAllProducts, loadProductsFromStorage, loadStateFromStorage])
   );
 
-  // Render item
-  const renderItem = useCallback(
-    ({ item, index }: { item: InventoryItem; index: number }) => {
-      const showBrandHeader =
-        index === 0 || (paginatedProducts[index - 1] && paginatedProducts[index - 1].brand !== item.brand);
-      return (
-        <View style={styles.tableRowContainer}>
-          <ProductItem
-            item={item}
-            index={(state.currentPage - 1) * itemsPerPage + index}
-            onEdit={(item) => setState((prev) => ({ ...prev, editItem: item }))}
-            onDelete={handleDeleteItem}
-            showBrandHeader={showBrandHeader}
-          />
-        </View>
-      );
-    },
-    [state.currentPage, handleDeleteItem, paginatedProducts]
+  // Save state whenever it changes
+  useFocusEffect(
+    useCallback(() => {
+      saveStateToStorage();
+    }, [saveStateToStorage])
   );
 
-  // Retry fetch
-  const handleRetry = useCallback(() => {
-    fetchAllProducts(state.searchTerm, state.sizeTerm);
-  }, [fetchAllProducts, state.searchTerm, state.sizeTerm]);
-
-  return (
-    <ScrollView style={styles.container}>
+  // Render header component
+  const renderHeader = useCallback(() => (
+    <>
       <View style={styles.header}>
         <Text style={styles.title}>Manajemen Inventaris</Text>
-        <TouchableOpacity onPress={handleRetry}>
-          <Ionicons name="refresh" size={24} color="#fff" />
+        <TouchableOpacity style={styles.refreshButton} onPress={() => fetchAllProducts(state.searchTerm, state.sizeTerm)}>
+          <Ionicons name="refresh" size={28} color="#FFFFFF" />
         </TouchableOpacity>
       </View>
 
       {/* Info Cards */}
       <View style={styles.infoContainer}>
-        <Text style={styles.infoTitle}>Informasi Inventaris</Text>
+        <Text style={styles.sectionTitle}>Informasi Inventaris</Text>
         <View style={styles.infoGrid}>
-          <View style={styles.infoCard}>
-            <Text style={styles.infoCardTitle}>Total Produk</Text>
-            <Text style={styles.infoCardValue}>{filteredProducts.length}</Text>
+          <View style={styles.infoRow}>
+            <View style={styles.infoCard}>
+              <View style={styles.infoCardGradient}>
+                <View style={styles.infoCardHeader}>
+                  <Text style={styles.infoCardTitle}>Total Produk</Text>
+                </View>
+                <View style={styles.infoCardContent}>
+                  <Text style={styles.infoCardValue}>{filteredProducts.length}</Text>
+                </View>
+              </View>
+            </View>
+            <View style={styles.infoCard}>
+              <View style={styles.infoCardGradient}>
+                <View style={styles.infoCardHeader}>
+                  <Text style={styles.infoCardTitle}>Stok Menipis</Text>
+                </View>
+                <View style={styles.infoCardContent}>
+                  <Text style={styles.infoCardValue}>{filteredProducts.filter((p) => p && p.stock < 5).length}</Text>
+                </View>
+              </View>
+            </View>
           </View>
-          <View style={styles.infoCard}>
-            <Text style={styles.infoCardTitle}>Stok Menipis</Text>
-            <Text style={styles.infoCardValue}>{filteredProducts.filter((p) => p && p.stock < 5).length}</Text>
-          </View>
-          <View style={styles.infoCard}>
-            <Text style={styles.infoCardTitle}>Total Unit</Text>
-            <Text style={styles.infoCardValue}>{filteredProducts.reduce((sum, p) => sum + (p && p.stock || 0), 0)}</Text>
-          </View>
-          <View style={styles.infoCard}>
-            <Text style={styles.infoCardTitle}>Jumlah Unit per Brand</Text>
-            <View style={styles.pickerContainer}>
-              <Picker
-                selectedValue={state.selectedBrand}
-                onValueChange={(value) => setState((prev) => ({ ...prev, selectedBrand: value, currentPage: 1 }))}
-                style={styles.picker}
-              >
-                <Picker.Item label={`Semua (${Object.keys(state.brandCounts).length} brand)`} value="all" />
-                {Object.entries(state.brandCounts).map(([brand, count]) => (
-                  <Picker.Item
-                    key={brand}
-                    label={`${sanitizeString(brand).toUpperCase()} (${count} unit)`}
-                    value={brand}
-                  />
-                ))}
-              </Picker>
-              {state.selectedBrand !== 'all' && (
-                <Text style={styles.infoCardValue}>
-                  {sanitizeString(state.selectedBrand).toUpperCase()}: {state.brandCounts[state.selectedBrand]} unit
-                </Text>
-              )}
+          <View style={styles.infoRow}>
+            <View style={styles.infoCard}>
+              <View style={styles.infoCardGradient}>
+                <View style={styles.infoCardHeader}>
+                  <Text style={styles.infoCardTitle}>Total Unit</Text>
+                </View>
+                <View style={styles.infoCardContent}>
+                  <Text style={styles.infoCardValue}>{filteredProducts.reduce((sum, p) => sum + (p && p.stock || 0), 0)}</Text>
+                </View>
+              </View>
+            </View>
+            <View style={styles.infoCard}>
+              <View style={styles.infoCardGradient}>
+                <View style={styles.infoCardHeader}>
+                  <Text style={styles.infoCardTitle}>Jumlah Unit per Brand</Text>
+                </View>
+                <View style={styles.infoCardContent}>
+                  <View style={styles.pickerContainer}>
+                    <Picker
+                      selectedValue={state.selectedBrand}
+                      onValueChange={(value) => setState((prev) => ({ ...prev, selectedBrand: value, currentPage: 1 }))}
+                      style={styles.picker}
+                    >
+                      <Picker.Item label={`Semua (${Object.keys(state.brandCounts).length} brand)`} value="all" />
+                      {Object.entries(state.brandCounts).map(([brand, count]) => (
+                        <Picker.Item
+                          key={brand}
+                          label={`${sanitizeString(brand).toUpperCase()} (${count} unit)`}
+                          value={brand}
+                        />
+                      ))}
+                    </Picker>
+                  </View>
+                  {state.selectedBrand !== 'all' && (
+                    <Text style={styles.infoCardValue}>
+                      {sanitizeString(state.selectedBrand).toUpperCase()}: {state.brandCounts[state.selectedBrand]} unit
+                    </Text>
+                  )}
+                </View>
+              </View>
             </View>
           </View>
         </View>
@@ -522,10 +634,11 @@ export default function InventoryScreen() {
       {/* Search Bar */}
       <View style={styles.searchContainer}>
         <View style={styles.searchInputWrapper}>
-          <Ionicons name="search" size={20} color="#666" style={styles.searchIcon} />
+          <Ionicons name="search" size={20} color="#9CA3AF" style={styles.searchIcon} />
           <TextInput
             style={styles.searchInput}
             placeholder="Cari brand atau model..."
+            placeholderTextColor="#9CA3AF"
             value={state.searchTerm}
             onChangeText={(text) => setState((prev) => ({ ...prev, searchTerm: text, currentPage: 1 }))}
             returnKeyType="search"
@@ -533,10 +646,11 @@ export default function InventoryScreen() {
           />
         </View>
         <View style={styles.searchInputWrapper}>
-          <Ionicons name="resize" size={20} color="#666" style={styles.searchIcon} />
+          <Ionicons name="resize" size={20} color="#9CA3AF" style={styles.searchIcon} />
           <TextInput
             style={styles.searchInput}
             placeholder="Cari ukuran..."
+            placeholderTextColor="#9CA3AF"
             value={state.sizeTerm}
             onChangeText={(text) => setState((prev) => ({ ...prev, sizeTerm: text, currentPage: 1 }))}
             returnKeyType="search"
@@ -551,16 +665,18 @@ export default function InventoryScreen() {
       {/* Edit Form */}
       {state.editItem && (
         <View style={styles.form}>
-          <Text style={styles.formTitle}>Edit Produk</Text>
+          <Text style={styles.sectionTitle}>Edit Produk</Text>
           <TextInput
             style={styles.input}
             placeholder="Nama Produk (Brand Model)"
+            placeholderTextColor="#9CA3AF"
             value={state.editItem.name}
             onChangeText={(text) => setState((prev) => ({ ...prev, editItem: { ...prev.editItem!, name: text } }))}
           />
           <TextInput
             style={styles.input}
             placeholder="Stok"
+            placeholderTextColor="#9CA3AF"
             keyboardType="numeric"
             value={state.editItem.stock.toString()}
             onChangeText={(text) => setState((prev) => ({ ...prev, editItem: { ...prev.editItem!, stock: parseInt(text) || 0 } }))}
@@ -568,18 +684,21 @@ export default function InventoryScreen() {
           <TextInput
             style={styles.input}
             placeholder="Ukuran"
+            placeholderTextColor="#9CA3AF"
             value={state.editItem.size}
             onChangeText={(text) => setState((prev) => ({ ...prev, editItem: { ...prev.editItem!, size: text } }))}
           />
           <TextInput
             style={styles.input}
             placeholder="Warna"
+            placeholderTextColor="#9CA3AF"
             value={state.editItem.color}
             onChangeText={(text) => setState((prev) => ({ ...prev, editItem: { ...prev.editItem!, color: text } }))}
           />
           <TextInput
             style={styles.input}
             placeholder="Harga Jual"
+            placeholderTextColor="#9CA3AF"
             keyboardType="numeric"
             value={state.editItem.selling_price}
             onChangeText={(text) => setState((prev) => ({ ...prev, editItem: { ...prev.editItem!, selling_price: text } }))}
@@ -587,6 +706,7 @@ export default function InventoryScreen() {
           <TextInput
             style={styles.input}
             placeholder="Harga Diskon"
+            placeholderTextColor="#9CA3AF"
             keyboardType="numeric"
             value={state.editItem.discount_price || ''}
             onChangeText={(text) => setState((prev) => ({ ...prev, editItem: { ...prev.editItem!, discount_price: text } }))}
@@ -604,86 +724,94 @@ export default function InventoryScreen() {
           </View>
         </View>
       )}
+    </>
+  ), [state, filteredProducts, handleSearch, handleUpdateItem, fetchAllProducts, sanitizeString]);
 
-      {/* Product Table */}
-      <View style={styles.tableContainer}>
-        {state.isLoading && (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#f97316" />
-            <Text style={styles.loadingText}>Memuat produk...</Text>
-          </View>
-        )}
-        {state.errorMessage && (
-          <View style={styles.errorContainer}>
-            <Text style={styles.errorText}>{state.errorMessage}</Text>
-            <TouchableOpacity style={styles.retryButton} onPress={handleRetry}>
-              <Text style={styles.retryButtonText}>Coba Lagi</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-        {filteredProducts.length === 0 && !state.isLoading && !state.errorMessage && (
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>Tidak ada produk ditemukan.</Text>
-          </View>
-        )}
-        {filteredProducts.length > 0 && (
-          <ScrollView horizontal={true} showsHorizontalScrollIndicator={true} style={styles.tableScroll}>
-            <View style={styles.tableContent}>
-              <View style={styles.tableHeader}>
-                <Text style={[styles.headerText, styles.headerNo]}>No</Text>
-                <Text style={[styles.headerText, styles.headerBrand]}>Brand</Text>
-                <Text style={[styles.headerText, styles.headerModel]}>Model</Text>
-                <Text style={[styles.headerText, styles.headerSize]}>Ukuran</Text>
-                <Text style={[styles.headerText, styles.headerColor]}>Warna</Text>
-                <Text style={[styles.headerText, styles.headerStock]}>Stok</Text>
-                <Text style={[styles.headerText, styles.headerPhysical]}>Fisik</Text>
-                <Text style={[styles.headerText, styles.headerPrice]}>Harga</Text>
-                <Text style={[styles.headerText, styles.headerDiscount]}>Diskon</Text>
-                <Text style={[styles.headerText, styles.headerQR]}>QR</Text>
-                <Text style={[styles.headerText, styles.headerActions]}>Aksi</Text>
-              </View>
-              <FlatList
-                data={paginatedProducts}
-                keyExtractor={(item) => item.id.toString()}
-                renderItem={renderItem}
-                scrollEnabled={false}
-                initialNumToRender={itemsPerPage}
-                maxToRenderPerBatch={itemsPerPage}
-                windowSize={2}
-                removeClippedSubviews={true}
-                extraData={state.products}
-                getItemLayout={(data, index) => ({
-                  length: 60,
-                  offset: 60 * index,
-                  index,
-                })}
-              />
-            </View>
-          </ScrollView>
-        )}
-        {totalPages > 1 && (
-          <View style={styles.paginationContainer}>
-            <TouchableOpacity
-              style={[styles.pageButton, state.currentPage === 1 && styles.disabledButton]}
-              onPress={() => setState((prev) => ({ ...prev, currentPage: Math.max(prev.currentPage - 1, 1) }))}
-              disabled={state.currentPage === 1}
-            >
-              <Text style={[styles.pageButtonText, state.currentPage === 1 && { color: '#ccc' }]}>Sebelumnya</Text>
-            </TouchableOpacity>
-            <Text style={styles.paginationText}>
-              Halaman {state.currentPage} dari {totalPages}
-            </Text>
-            <TouchableOpacity
-              style={[styles.pageButton, state.currentPage === totalPages && styles.disabledButton]}
-              onPress={() => setState((prev) => ({ ...prev, currentPage: Math.min(prev.currentPage + 1, totalPages) }))}
-              disabled={state.currentPage === totalPages}
-            >
-              <Text style={[styles.pageButtonText, state.currentPage === totalPages && { color: '#ccc' }]}>Selanjutnya</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-      </View>
-    </ScrollView>
+  // Render footer component
+  const renderFooter = useCallback(() => (
+    <>
+      {state.isLoading && (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#3B82F6" />
+          <Text style={styles.loadingText}>Memuat produk...</Text>
+        </View>
+      )}
+      {state.errorMessage && (
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>{state.errorMessage}</Text>
+          <TouchableOpacity style={styles.actionButton} onPress={() => fetchAllProducts(state.searchTerm, state.sizeTerm)}>
+            <Text style={styles.actionButtonText}>Coba Lagi</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+      {filteredProducts.length === 0 && !state.isLoading && !state.errorMessage && (
+        <View style={styles.emptyContainer}>
+          <Text style={styles.noDataText}>Tidak ada produk ditemukan.</Text>
+        </View>
+      )}
+      {totalPages > 1 && (
+        <View style={styles.paginationContainer}>
+          <TouchableOpacity
+            style={[styles.actionButton, state.currentPage === 1 && styles.disabledButton]}
+            onPress={() => setState((prev) => ({ ...prev, currentPage: Math.max(prev.currentPage - 1, 1) }))}
+            disabled={state.currentPage === 1}
+          >
+            <Text style={[styles.actionButtonText, state.currentPage === 1 && { color: '#9CA3AF' }]}>Sebelumnya</Text>
+          </TouchableOpacity>
+          <Text style={styles.paginationText}>
+            Halaman {state.currentPage} dari {totalPages}
+          </Text>
+          <TouchableOpacity
+            style={[styles.actionButton, state.currentPage === totalPages && styles.disabledButton]}
+            onPress={() => setState((prev) => ({ ...prev, currentPage: Math.min(prev.currentPage + 1, totalPages) }))}
+            disabled={state.currentPage === totalPages}
+          >
+            <Text style={[styles.actionButtonText, state.currentPage === totalPages && { color: '#9CA3AF' }]}>Selanjutnya</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+    </>
+  ), [state, filteredProducts, totalPages, fetchAllProducts]);
+
+  // Render item
+  const renderItem = useCallback(
+    ({ item, index }: { item: InventoryItem; index: number }) => {
+      const showBrandHeader =
+        index === 0 || (paginatedProducts[index - 1] && paginatedProducts[index - 1].brand !== item.brand);
+      return (
+        <ProductItem
+          item={item}
+          index={(state.currentPage - 1) * itemsPerPage + index}
+          onEdit={(item) => setState((prev) => ({ ...prev, editItem: item }))}
+          onDelete={handleDeleteItem}
+          showBrandHeader={showBrandHeader}
+        />
+      );
+    },
+    [state.currentPage, handleDeleteItem, paginatedProducts]
+  );
+
+  return (
+    <View style={styles.container}>
+      <FlatList
+        data={filteredProducts.length > 0 ? paginatedProducts : []}
+        keyExtractor={(item) => item.id.toString()}
+        renderItem={renderItem}
+        ListHeaderComponent={renderHeader}
+        ListFooterComponent={renderFooter}
+        initialNumToRender={itemsPerPage}
+        maxToRenderPerBatch={itemsPerPage}
+        windowSize={2}
+        removeClippedSubviews={true}
+        extraData={state.products}
+        getItemLayout={(data, index) => ({
+          length: 300, // Approximate height of a card including QR code
+          offset: 300 * index,
+          index,
+        })}
+        contentContainerStyle={styles.listContent}
+      />
+    </View>
   );
 }
 
@@ -693,95 +821,158 @@ const { width } = Dimensions.get('window');
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#F3F4F6',
+  },
+  listContent: {
     padding: 16,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#f97316',
+    backgroundColor: '#1F2937',
     padding: 16,
     borderRadius: 12,
-    marginBottom: 16,
+    marginBottom: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
   },
   title: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '700',
-    color: '#fff',
+    color: '#FFFFFF',
     textTransform: 'uppercase',
   },
-  infoContainer: {
-    backgroundColor: '#292929',
-    padding: 16,
+  refreshButton: {
+    padding: 12,
+    backgroundColor: '#2563EB',
     borderRadius: 12,
-    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
   },
-  infoTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#fff',
+  infoContainer: {
+    backgroundColor: '#FFFFFF',
+    padding: 16,
+    borderRadius: 8,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
+    width: width - 32,
+    alignSelf: 'center',
+  },
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: '700',
     textAlign: 'center',
-    marginBottom: 16,
+    marginVertical: 16,
+    color: '#1E3A8A',
     textTransform: 'uppercase',
   },
   infoGrid: {
+    flexDirection: 'column',
+    gap: 12,
+    width: '100%',
+  },
+  infoRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    flexWrap: 'wrap',
+    gap: 12,
+    width: '100%',
+    flexShrink: 1,
   },
   infoCard: {
-    backgroundColor: '#f3f4f6',
-    padding: 16,
-    borderRadius: 12,
-    width: (width - 48) / 2 - 8,
-    borderLeftWidth: 4,
-    borderLeftColor: '#f97316',
+    width: (width - 32 - 32 - 12) / 2,
+    minHeight: 140,
+    flexShrink: 1,
+  },
+  infoCardGradient: {
+    flex: 1,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#93C5FD',
+    backgroundColor: '#FFFFFF',
+    overflow: 'visible',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3.84,
-    elevation: 5,
-    marginBottom: 16,
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  infoCardHeader: {
+    backgroundColor: '#EFF6FF',
+    padding: 8,
   },
   infoCardTitle: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#666',
+    color: '#1F2937',
+    fontSize: 14,
+    fontWeight: '500',
+    textAlign: 'center',
     textTransform: 'uppercase',
   },
-  infoCardValue: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#333',
-    marginTop: 4,
+  infoCardContent: {
+    backgroundColor: '#1F2937',
+    padding: 16,
+    alignItems: 'center',
+    flex: 1,
+    justifyContent: 'center',
   },
   pickerContainer: {
-    marginTop: 8,
+    width: '100%',
+    borderRadius: 8,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    overflow: 'visible',
   },
   picker: {
-    backgroundColor: '#fff',
-    borderRadius: 8,
-    height: 40,
-    color: '#333',
+    width: '100%',
+    height: Platform.OS === 'ios' ? 100 : 40,
+    color: '#1F2937',
+    backgroundColor: '#FFFFFF',
+    marginVertical: 8,
+  },
+  infoCardValue: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    marginTop: 4,
+    textAlign: 'center',
   },
   searchContainer: {
-    backgroundColor: '#292929',
+    backgroundColor: '#FFFFFF',
     padding: 16,
-    borderRadius: 12,
-    marginBottom: 16,
+    borderRadius: 8,
+    marginBottom: 24,
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
   },
   searchInputWrapper: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: '#F9FAFB',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#e5e7eb',
+    borderColor: '#E5E7EB',
     minWidth: 150,
   },
   searchIcon: {
@@ -792,162 +983,113 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 8,
     fontSize: 16,
-    color: '#333',
+    color: '#1F2937',
   },
   form: {
-    backgroundColor: '#292929',
+    backgroundColor: '#FFFFFF',
     padding: 16,
-    borderRadius: 12,
-    marginBottom: 16,
-  },
-  formTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#fff',
-    marginBottom: 12,
+    borderRadius: 8,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
   },
   input: {
-    backgroundColor: '#fff',
+    backgroundColor: '#F9FAFB',
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 16,
-    color: '#333',
+    color: '#1F2937',
     borderWidth: 1,
-    borderColor: '#e5e7eb',
+    borderColor: '#E5E7EB',
     marginBottom: 8,
   },
   formActions: {
     flexDirection: 'row',
     gap: 8,
+    justifyContent: 'center',
   },
-  tableContainer: {
-    backgroundColor: '#292929',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
+  cardContainer: {
+    width: width - 32,
+    alignSelf: 'center',
+    marginBottom: 12,
   },
-  tableScroll: {
-    flexGrow: 0,
-  },
-  tableContent: {
-    minWidth: 720,
-  },
-  tableHeader: {
-    flexDirection: 'row',
-    backgroundColor: '#f97316',
-    paddingVertical: 12,
-    paddingHorizontal: 8,
-    borderRadius: 12,
-    marginBottom: 8,
-  },
-  tableRowContainer: {
-    minWidth: 720,
-  },
-  headerText: {
-    color: '#000',
-    fontWeight: '600',
-    textAlign: 'center',
-    fontSize: 12,
-    paddingVertical: 8,
-    textTransform: 'uppercase',
-  },
-  headerNo: { width: 50 },
-  headerBrand: { width: 120 },
-  headerModel: { width: 120 },
-  headerSize: { width: 80 },
-  headerColor: { width: 80 },
-  headerStock: { width: 60 },
-  headerPhysical: { width: 60 },
-  headerPrice: { width: 100 },
-  headerDiscount: { width: 100 },
-  headerQR: { width: 100 },
-  headerActions: { width: 100 },
-  item: {
-    flexDirection: 'row',
-    backgroundColor: '#fff',
+  productCard: {
+    backgroundColor: '#FFFFFF',
     borderRadius: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 8,
-    marginBottom: 8,
-    alignItems: 'center',
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3.84,
-    elevation: 5,
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  itemEven: {
-    backgroundColor: '#fff',
+  cardRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 4,
   },
-  itemOdd: {
-    backgroundColor: '#f3f4f6',
-  },
-  itemText: {
-    textAlign: 'center',
+  cardLabel: {
     fontSize: 12,
-    color: '#333',
-    paddingVertical: 8,
+    fontWeight: '600',
+    color: '#1F2937',
+    width: 80,
   },
-  itemTextContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
+  cardValue: {
+    fontSize: 12,
+    color: '#1F2937',
+    flex: 1,
+    textAlign: 'left',
   },
-  itemNo: { width: 50 },
-  itemBrand: { width: 120 },
-  itemModel: { width: 120 },
-  itemSize: { width: 80 },
-  itemColor: { width: 80 },
-  itemStock: { width: 60 },
-  itemPhysical: { width: 60 },
-  itemPrice: { width: 100 },
-  itemDiscount: { width: 100 },
-  lowStock: { color: '#ef4444' },
-  qrToggle: {
-    width: 100,
-    alignItems: 'center',
-    justifyContent: 'center',
+  lowStock: {
+    color: '#DC2626',
   },
   qrToggleText: {
-    color: '#3b82f6',
+    color: '#2563EB',
     fontSize: 12,
     fontWeight: '500',
   },
   actions: {
-    width: 100,
     flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: 'flex-start',
     gap: 12,
   },
   actionText: {
-    color: '#3b82f6',
+    color: '#2563EB',
     fontSize: 12,
     fontWeight: '500',
   },
   brandHeader: {
-    backgroundColor: '#f97316',
-    color: '#000',
+    backgroundColor: '#EFF6FF',
+    color: '#1F2937',
     fontWeight: '600',
     padding: 12,
     textTransform: 'uppercase',
     fontSize: 12,
     borderRadius: 8,
     marginBottom: 8,
-    minWidth: 720,
   },
   qrContainer: {
     alignItems: 'center',
     padding: 10,
-    backgroundColor: '#f3f4f6',
+    backgroundColor: '#F9FAFB',
     borderRadius: 8,
-    marginBottom: 8,
-    marginHorizontal: 8,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
   },
   qrUnitCode: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#333',
+    color: '#1F2937',
     marginBottom: 8,
   },
   qrCode: {
@@ -959,21 +1101,30 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   errorText: {
-    color: '#ef4444',
+    color: '#DC2626',
     textAlign: 'center',
     fontSize: 16,
     marginBottom: 12,
   },
-  retryButton: {
-    backgroundColor: '#f97316',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 12,
+  emptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
   },
-  retryButtonText: {
-    color: '#fff',
+  noDataText: {
+    color: '#9CA3AF',
     fontSize: 14,
-    fontWeight: '600',
+    textAlign: 'center',
+    marginVertical: 16,
   },
   loadingContainer: {
     alignItems: 'center',
@@ -983,17 +1134,8 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 8,
     fontSize: 14,
-    color: '#666',
-  },
-  emptyContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 20,
-  },
-  emptyText: {
-    fontSize: 16,
-    color: '#666',
-    textAlign: 'center',
+    color: '#1E3A8A',
+    fontWeight: '600',
   },
   paginationContainer: {
     flexDirection: 'row',
@@ -1001,37 +1143,33 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 16,
   },
-  pageButton: {
-    padding: 12,
-    borderRadius: 12,
-    backgroundColor: '#f97316',
-  },
-  disabledButton: {
-    backgroundColor: '#ccc',
-  },
-  pageButtonText: {
-    color: '#000',
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  paginationText: {
-    fontSize: 14,
-    color: '#fff',
-  },
   actionButton: {
-    backgroundColor: '#f97316',
+    backgroundColor: '#2563EB',
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
   },
   cancelButton: {
-    backgroundColor: '#6b7280',
+    backgroundColor: '#DC2626',
+  },
+  disabledButton: {
+    backgroundColor: '#E5E7EB',
   },
   actionButtonText: {
-    color: '#fff',
+    color: '#FFFFFF',
     fontSize: 14,
+    fontWeight: '600',
+  },
+  paginationText: {
+    fontSize: 14,
+    color: '#1F2937',
     fontWeight: '600',
   },
 });

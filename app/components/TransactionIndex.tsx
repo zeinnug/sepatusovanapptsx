@@ -79,27 +79,26 @@ const TransactionIndex: React.FC<Props> = ({ navigation }) => {
   const [loading, setLoading] = useState<boolean>(true);
   const [printing, setPrinting] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  const [filterDate, setFilterDate] = useState<Date>(new Date()); // Current date: August 20, 2025
+  const [filterDate, setFilterDate] = useState<Date>(new Date());
   const [showDatePicker, setShowDatePicker] = useState<boolean>(false);
   const [filterPaymentMethod, setFilterPaymentMethod] = useState<string>('Semua Metode');
   const [filterPaymentStatus, setFilterPaymentStatus] = useState<string>('Semua Status');
   const [selectedPrinter, setSelectedPrinter] = useState<
     { name: string; url: string } | undefined
   >();
-  const [currentTime, setCurrentTime] = useState<Date>(new Date()); // State untuk jam real-time
+  const [currentTime, setCurrentTime] = useState<Date>(new Date());
 
-  const paymentMethods = ['Semua Metode', 'cash', 'qris', 'Transfer Bank']; // Perbaiki koma kosong
+  const paymentMethods = ['Semua Metode', 'cash', 'qris', 'Transfer Bank'];
   const paymentStatuses = ['Semua Status', 'paid', 'unpaid'];
   const WIB_OFFSET = 7 * 60 * 60 * 1000; // UTC+7 in milliseconds
   const API_URL = 'https://testingaplikasi.tokosepatusovan.com/api/transactions/';
 
-  // Update waktu real-time setiap detik
+  // Update waktu real-time setiap menit (sesuai Dashboard)
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(new Date());
-    }, 1000); // Perbarui setiap detik
-
-    return () => clearInterval(timer); // Bersihkan interval saat komponen unmount
+    }, 60000); // Perbarui setiap menit, sesuai Dashboard
+    return () => clearInterval(timer);
   }, []);
 
   // Format date to YYYY-MM-DD in WIB
@@ -110,15 +109,16 @@ const TransactionIndex: React.FC<Props> = ({ navigation }) => {
       .padStart(2, '0')}-${wibDate.getUTCDate().toString().padStart(2, '0')}`;
   };
 
-  // Format date and time for display (dd/MM/yyyy HH:mm)
+  // Format date and time for display (dd MMMM yyyy HH:mm)
   const formatDisplayDate = (date: Date): string => {
     const wibDate = new Date(date.getTime() + WIB_OFFSET);
-    const day = wibDate.getUTCDate().toString().padStart(2, '0');
-    const month = (wibDate.getUTCMonth() + 1).toString().padStart(2, '0');
-    const year = wibDate.getUTCFullYear();
-    const hours = wibDate.getUTCHours().toString().padStart(2, '0');
-    const minutes = wibDate.getUTCMinutes().toString().padStart(2, '0');
-    return `${day}/${month}/${year} ${hours}:${minutes}`;
+    return wibDate.toLocaleString('id-ID', {
+      day: '2-digit',
+      month: 'long',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
   };
 
   // Format invoice number (INV-DDMMYYYY)
@@ -137,7 +137,6 @@ const TransactionIndex: React.FC<Props> = ({ navigation }) => {
       setError(null);
 
       const token = await AsyncStorage.getItem('token');
-      console.log('Token:', token ? 'Found' : 'Not found');
       if (!token) {
         throw new Error('No authentication token found. Please log in again.');
       }
@@ -152,8 +151,6 @@ const TransactionIndex: React.FC<Props> = ({ navigation }) => {
       }
 
       const url = `${API_URL}?${params.toString()}`;
-      console.log('Fetching from:', url);
-
       const response = await fetch(url, {
         method: 'GET',
         headers: {
@@ -162,20 +159,16 @@ const TransactionIndex: React.FC<Props> = ({ navigation }) => {
         },
       });
 
-      console.log('Response status:', response.status);
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
       const result: ApiResponse = await response.json();
-      console.log('API response:', JSON.stringify(result, null, 2));
 
       if (result.success) {
-        console.log('Raw transactions:', result.data.transactions.length);
-        // Format invoice numbers for each transaction
         const formattedTransactions = result.data.transactions.map(transaction => ({
           ...transaction,
-          invoice_number: formatInvoiceNumber(transaction.created_at)
+          invoice_number: formatInvoiceNumber(transaction.created_at),
         }));
         setTransactions(formattedTransactions);
       } else {
@@ -183,7 +176,6 @@ const TransactionIndex: React.FC<Props> = ({ navigation }) => {
       }
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : 'Unknown error';
-      console.error('Fetch error:', errorMessage);
       setError(`Error fetching transactions: ${errorMessage}`);
       Alert.alert('Error', `Error fetching transactions: ${errorMessage}`);
     } finally {
@@ -311,7 +303,6 @@ const TransactionIndex: React.FC<Props> = ({ navigation }) => {
       Alert.alert('Success', 'Receipt printed successfully');
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      console.error('Print error:', errorMessage);
       Alert.alert('Error', `Failed to print receipt: ${errorMessage}`);
     } finally {
       setPrinting(false);
@@ -341,41 +332,43 @@ const TransactionIndex: React.FC<Props> = ({ navigation }) => {
 
   const renderTransaction = ({ item }: { item: Transaction }) => (
     <View style={styles.transactionCard}>
-      <Text style={styles.invoiceText}>{formatInvoiceNumber(item.created_at)}</Text>
-      <Text style={styles.customerText}>Customer: {item.customer_name}</Text>
-      <Text style={styles.amountText}>
-        Total: Rp {item.final_amount.toLocaleString('id-ID')}
-      </Text>
-      <Text style={styles.paymentText}>Payment: {item.payment_method}</Text>
-      <Text style={styles.dateText}>
-        Date: {formatDisplayDate(new Date(item.created_at))}
-      </Text>
-      <View style={styles.itemsContainer}>
-        <Text style={styles.itemsTitle}>Items:</Text>
-        {item.items.map((product: TransactionItem) => (
-          <Text key={product.id} style={styles.itemText}>
-            {product.product_name} (Qty: {product.quantity}, Rp{' '}
-            {product.subtotal.toLocaleString('id-ID')})
-          </Text>
-        ))}
-      </View>
-      <TouchableOpacity
-        style={[styles.printButton, printing && styles.printButtonDisabled]}
-        onPress={() => printReceipt(item)}
-        disabled={printing}
-      >
-        <Text style={styles.printButtonText}>
-          {printing ? 'Printing...' : 'Cetak Struk'}
+      <View style={styles.transactionCardGradient}>
+        <Text style={styles.invoiceText}>{formatInvoiceNumber(item.created_at)}</Text>
+        <Text style={styles.customerText}>Customer: {item.customer_name}</Text>
+        <Text style={styles.amountText}>
+          Total: Rp {item.final_amount.toLocaleString('id-ID')}
         </Text>
-      </TouchableOpacity>
+        <Text style={styles.paymentText}>Payment: {item.payment_method}</Text>
+        <Text style={styles.dateText}>
+          Date: {formatDisplayDate(new Date(item.created_at))}
+        </Text>
+        <View style={styles.itemsContainer}>
+          <Text style={styles.itemsTitle}>Items:</Text>
+          {item.items.map((product: TransactionItem) => (
+            <Text key={product.id} style={styles.itemText}>
+              {product.product_name} (Qty: {product.quantity}, Rp{' '}
+              {product.subtotal.toLocaleString('id-ID')})
+            </Text>
+          ))}
+        </View>
+        <TouchableOpacity
+          style={[styles.printButton, printing && styles.printButtonDisabled]}
+          onPress={() => printReceipt(item)}
+          disabled={printing}
+        >
+          <Text style={styles.printButtonText}>
+            {printing ? 'Printing...' : 'Cetak Struk'}
+          </Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#00FFAA" />
-        <Text style={styles.loadingText}>Loading transactions...</Text>
+        <ActivityIndicator size="large" color="#3B82F6" />
+        <Text style={styles.loadingText}>Memuat Transaksi...</Text>
       </View>
     );
   }
@@ -392,7 +385,7 @@ const TransactionIndex: React.FC<Props> = ({ navigation }) => {
             fetchTransactions();
           }}
         >
-          <Text style={styles.retryButtonText}>Retry</Text>
+          <Text style={styles.buttonText}>Coba Lagi</Text>
         </TouchableOpacity>
       </View>
     );
@@ -400,11 +393,12 @@ const TransactionIndex: React.FC<Props> = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>SEPATU BY SOVAN</Text>
-      <Text style={styles.subtitle}>Luxury Footwear Collection</Text>
-      <Text style={styles.currentTimeText}>
-        Waktu Saat Ini: {formatDisplayDate(currentTime)}
-      </Text>
+      <View style={styles.headerContainer}>
+        <Text style={styles.title}>@SEPATUBYSOVAN</Text>
+        <Text style={styles.subtitle}>
+          Waktu Saat Ini: {formatDisplayDate(currentTime)}
+        </Text>
+      </View>
       <View style={styles.buttonContainer}>
         <TouchableOpacity style={styles.button}>
           <Text style={styles.buttonText}>SISTEM KASIR</Text>
@@ -447,7 +441,7 @@ const TransactionIndex: React.FC<Props> = ({ navigation }) => {
                 display={Platform.OS === 'ios' ? 'inline' : 'default'}
                 onChange={onDateChange}
                 style={styles.datePicker}
-                textColor="#FFD700"
+                textColor="#FFFFFF"
               />
             )}
           </View>
@@ -458,7 +452,7 @@ const TransactionIndex: React.FC<Props> = ({ navigation }) => {
                 selectedValue={filterPaymentMethod}
                 onValueChange={(itemValue) => setFilterPaymentMethod(itemValue)}
                 style={styles.picker}
-                dropdownIconColor="#FFD700"
+                dropdownIconColor="#FFFFFF"
               >
                 {paymentMethods.map((method) => (
                   <Picker.Item key={method} label={method} value={method} />
@@ -473,7 +467,7 @@ const TransactionIndex: React.FC<Props> = ({ navigation }) => {
                 selectedValue={filterPaymentStatus}
                 onValueChange={(itemValue) => setFilterPaymentStatus(itemValue)}
                 style={styles.picker}
-                dropdownIconColor="#FFD700"
+                dropdownIconColor="#FFFFFF"
               >
                 {paymentStatuses.map((status) => (
                   <Picker.Item key={status} label={status} value={status} />
@@ -516,27 +510,28 @@ const TransactionIndex: React.FC<Props> = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1E2A3A',
+    backgroundColor: '#F3F4F6',
     padding: 16,
+    width: '100%',
+  },
+  headerContainer: {
+    alignItems: 'center',
+    marginBottom: 24,
   },
   title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#00FFAA',
+    color: '#1E3A8A',
+    fontSize: 22,
+    fontWeight: '800',
+    fontFamily: 'serif',
     textAlign: 'center',
-    marginBottom: 8,
+    textTransform: 'uppercase',
   },
   subtitle: {
-    fontSize: 14,
-    color: '#FFD700',
+    color: '#1E3A8A',
+    fontSize: 12,
+    fontWeight: '600',
     textAlign: 'center',
-    marginBottom: 8,
-  },
-  currentTimeText: {
-    fontSize: 16,
-    color: '#FFD700',
-    textAlign: 'center',
-    marginBottom: 16,
+    marginTop: 8,
   },
   buttonContainer: {
     flexDirection: 'row',
@@ -544,49 +539,69 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   button: {
-    backgroundColor: 'rgba(255, 215, 0, 0.2)',
+    backgroundColor: '#EFF6FF',
     padding: 12,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#FFD700',
+    borderColor: '#93C5FD',
     flex: 1,
     marginRight: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
   },
   actionButton: {
-    backgroundColor: '#00FFAA',
+    backgroundColor: '#2563EB',
     padding: 12,
     borderRadius: 8,
     flex: 1,
     marginLeft: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
   },
   buttonText: {
-    color: '#FFD700',
+    color: '#1F2937',
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: '700',
     textAlign: 'center',
   },
   buttonSubText: {
-    color: '#FFD700',
+    color: '#1F2937',
     fontSize: 12,
     textAlign: 'center',
+    marginTop: 4,
   },
   actionButtonText: {
-    color: '#1E2A3A',
+    color: '#FFFFFF',
     fontSize: 14,
-    fontWeight: 'bold',
+    fontWeight: '600',
     textAlign: 'center',
   },
   filterContainer: {
-    backgroundColor: 'rgba(255, 215, 0, 0.2)',
+    backgroundColor: '#FFFFFF',
     padding: 12,
     borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
     marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
   },
   filterTitle: {
-    color: '#FFD700',
-    fontSize: 18,
-    fontWeight: 'bold',
+    color: '#1E3A8A',
+    fontSize: 20,
+    fontWeight: '700',
     marginBottom: 8,
+    textAlign: 'center',
+    textTransform: 'uppercase',
   },
   filterRow: {
     flexDirection: 'row',
@@ -600,44 +615,51 @@ const styles = StyleSheet.create({
     minWidth: 100,
   },
   filterLabel: {
-    color: '#FFD700',
+    color: '#1F2937',
     fontSize: 14,
+    fontWeight: '500',
     marginBottom: 4,
   },
   filterInput: {
-    backgroundColor: '#2A3441',
+    backgroundColor: '#1F2937',
     padding: 8,
-    borderRadius: 4,
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#FFD700',
+    borderColor: '#93C5FD',
     justifyContent: 'center',
     alignItems: 'center',
   },
   dateTextInput: {
-    color: '#FFD700',
+    color: '#FFFFFF',
     fontSize: 14,
+    fontWeight: '500',
   },
   pickerContainer: {
-    backgroundColor: '#2A3441',
-    borderRadius: 4,
+    backgroundColor: '#1F2937',
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#FFD700',
+    borderColor: '#93C5FD',
   },
   picker: {
-    color: '#FFD700',
+    color: '#FFFFFF',
     height: 40,
   },
   resetButton: {
-    backgroundColor: '#00FFAA',
+    backgroundColor: '#2563EB',
     padding: 8,
     borderRadius: 8,
     justifyContent: 'center',
     minWidth: 100,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
   },
   resetButtonText: {
-    color: '#1E2A3A',
+    color: '#FFFFFF',
     fontSize: 14,
-    fontWeight: 'bold',
+    fontWeight: '600',
     textAlign: 'center',
   },
   noTransactions: {
@@ -646,143 +668,173 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   noTransactionsText: {
-    color: '#FFD700',
+    color: '#1E3A8A',
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: '700',
+    textTransform: 'uppercase',
   },
   noTransactionsSubText: {
-    color: '#FFD700',
+    color: '#9CA3AF',
     fontSize: 14,
     textAlign: 'center',
     marginTop: 8,
   },
   transactionCard: {
-    backgroundColor: '#2A3441',
-    borderRadius: 8,
-    padding: 16,
     marginBottom: 16,
+  },
+  transactionCardGradient: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#FFD700',
+    borderColor: '#BFDBFE',
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
   },
   invoiceText: {
     fontSize: 18,
-    fontWeight: 'bold',
-    color: '#00FFAA',
+    fontWeight: '700',
+    color: '#1E3A8A',
     marginBottom: 8,
   },
   customerText: {
     fontSize: 16,
-    color: '#FFD700',
+    color: '#1F2937',
     marginBottom: 4,
   },
   amountText: {
     fontSize: 16,
-    color: '#FFD700',
+    color: '#1F2937',
     marginBottom: 4,
+    fontWeight: '600',
   },
   paymentText: {
     fontSize: 14,
-    color: '#FFD700',
+    color: '#1F2937',
     marginBottom: 4,
   },
   dateText: {
     fontSize: 14,
-    color: '#FFD700',
+    color: '#1F2937',
     marginBottom: 8,
   },
   itemsContainer: {
     borderTopWidth: 1,
-    borderTopColor: '#FFD700',
+    borderTopColor: '#BFDBFE',
     paddingTop: 8,
   },
   itemsTitle: {
     fontSize: 14,
-    fontWeight: 'bold',
-    color: '#FFD700',
+    fontWeight: '600',
+    color: '#1E3A8A',
     marginBottom: 4,
   },
   itemText: {
     fontSize: 14,
-    color: '#FFD700',
+    color: '#1F2937',
     marginBottom: 4,
   },
   printButton: {
-    backgroundColor: '#FFD700',
+    backgroundColor: '#2563EB',
     padding: 12,
-    borderRadius: 4,
+    borderRadius: 8,
     alignItems: 'center',
     marginTop: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
   },
   printButtonDisabled: {
-    backgroundColor: '#FFD70080',
+    backgroundColor: '#2563EB80',
   },
   printButtonText: {
-    color: '#1E2A3A',
+    color: '#FFFFFF',
     fontSize: 14,
-    fontWeight: 'bold',
+    fontWeight: '600',
   },
   createButton: {
-    backgroundColor: '#00FFAA',
+    backgroundColor: '#2563EB',
     padding: 16,
     borderRadius: 8,
     alignItems: 'center',
     marginTop: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
   },
   createButtonText: {
-    color: '#1E2A3A',
+    color: '#FFFFFF',
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: '600',
   },
   selectPrinterButton: {
-    backgroundColor: '#FFD700',
+    backgroundColor: '#2563EB',
     padding: 12,
-    borderRadius: 4,
+    borderRadius: 8,
     alignItems: 'center',
     marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
   },
   selectPrinterButtonText: {
-    color: '#1E2A3A',
+    color: '#FFFFFF',
     fontSize: 14,
-    fontWeight: 'bold',
+    fontWeight: '600',
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#F3F4F6',
   },
   loadingText: {
-    color: '#FFD700',
-    fontSize: 16,
-    marginTop: 8,
+    color: '#1E3A8A',
+    fontSize: 18,
+    fontWeight: '600',
+    marginTop: 16,
+    textAlign: 'center',
   },
   errorContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#F3F4F6',
     padding: 20,
   },
   errorText: {
-    fontSize: 16,
-    color: '#FF5555',
+    color: '#DC2626',
+    fontSize: 20,
+    fontWeight: '600',
     textAlign: 'center',
-    marginBottom: 16,
+    marginBottom: 24,
+    lineHeight: 28,
   },
   retryButton: {
-    backgroundColor: '#00FFAA',
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 4,
-  },
-  retryButtonText: {
-    color: '#1E2A3A',
-    fontSize: 16,
-    fontWeight: 'bold',
+    backgroundColor: '#2563EB',
+    paddingVertical: 14,
+    paddingHorizontal: 32,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 5,
   },
   datePicker: {
-    backgroundColor: '#2A3441',
-    borderRadius: 4,
+    backgroundColor: '#1F2937',
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#FFD700',
+    borderColor: '#93C5FD',
     marginTop: 4,
   },
   listContainer: {

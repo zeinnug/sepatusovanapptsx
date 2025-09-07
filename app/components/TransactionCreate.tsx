@@ -10,6 +10,8 @@ import {
   Modal,
   ActivityIndicator,
   Dimensions,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Picker } from '@react-native-picker/picker';
@@ -169,7 +171,7 @@ const TransactionCreate: React.FC<Props> = ({ navigation }) => {
       const perPage = 100;
 
       do {
-        const url = new URL('http://192.168.1.8:8000/api/products');
+        const url = new URL('https://testingaplikasi.tokosepatusovan.com/api/products');
         url.searchParams.set('page', currentPage.toString());
         url.searchParams.set('per_page', perPage.toString());
         url.searchParams.set('no_cache', 'true');
@@ -214,7 +216,7 @@ const TransactionCreate: React.FC<Props> = ({ navigation }) => {
                 ? parseFloat(product.discount_price)
                 : null,
               unit_code: unit.unit_code || `UNIT-${product.id}`,
-              qr_code: unit.qr_code || `http://192.168.1.8:8000/inventory/${product.id}/unit/${unit.unit_code}`,
+              qr_code: unit.qr_code || `https://testingaplikasi.tokosepatusovan.com/inventory/${product.id}/unit/${unit.unit_code}`,
               stock: product.stock || 0,
               is_active: unit.is_active,
             }));
@@ -255,7 +257,7 @@ const TransactionCreate: React.FC<Props> = ({ navigation }) => {
       setTimeout(() => {
         setShowPopup(false);
         navigation.navigate('TransactionIndex');
-      }, 1000); // Popup displayed for 1 second before navigation
+      }, 1000);
     }
   }, [navigation]);
 
@@ -423,9 +425,7 @@ const TransactionCreate: React.FC<Props> = ({ navigation }) => {
         })),
       };
 
-      console.log('Mengirim payload transaksi:', JSON.stringify(payload, null, 2));
-
-      const response = await axios.post('http://192.168.1.8:8000/api/transactions', payload, {
+      const response = await axios.post('https://testingaplikasi.tokosepatusovan.com/api/transactions', payload, {
         headers: {
           'Content-Type': 'application/json',
           Accept: 'application/json',
@@ -437,7 +437,6 @@ const TransactionCreate: React.FC<Props> = ({ navigation }) => {
         throw new Error(response.data.message || 'Gagal membuat transaksi.');
       }
 
-      // Reset state before navigation
       setCart([]);
       setCustomerName('');
       setCustomerPhone('');
@@ -447,14 +446,12 @@ const TransactionCreate: React.FC<Props> = ({ navigation }) => {
       setNotes('');
       setNewTotal('');
 
-      // Show success popup and navigate after closing
       showPopupMessage('Transaksi Berhasil', 'Transaksi telah berhasil dibuat!', 'success', true);
     } catch (error: unknown) {
       const axiosError = error as AxiosError<ApiErrorResponse>;
       const message =
         axiosError.response?.data?.message ||
         'Gagal membuat transaksi. Silakan coba lagi.';
-      console.log('Error response:', JSON.stringify(axiosError.response?.data, null, 2));
       showPopupMessage('Gagal Membuat Transaksi', message, 'error');
       if (axiosError.response?.status === 401) {
         await AsyncStorage.removeItem('token');
@@ -488,7 +485,7 @@ const TransactionCreate: React.FC<Props> = ({ navigation }) => {
 
       const scannedCode = data.trim();
       let unitCode: string | null = null;
-      if (scannedCode.startsWith('http://192.168.1.8:8000/inventory/')) {
+      if (scannedCode.startsWith('https://testingaplikasi.tokosepatusovan.com/inventory/')) {
         const match = scannedCode.match(/\/unit\/([^/]+)$/);
         if (match && match[1]) {
           unitCode = match[1];
@@ -547,26 +544,26 @@ const TransactionCreate: React.FC<Props> = ({ navigation }) => {
         activeOpacity={0.7}
       >
         <View style={styles.productCardContent}>
-          <Text style={[styles.text, darkMode && styles.textDark, styles.productName]}>
+          <Text style={[styles.productName, darkMode && styles.textDark]}>
             {item.product_name || 'Nama tidak tersedia'}
           </Text>
-          <Text style={[styles.text, darkMode && styles.textDark, styles.productDetails]}>
+          <Text style={[styles.productDetails, darkMode && styles.textDark]}>
             Brand: {item.brand || '-'}, Model: {item.model || '-'}
           </Text>
-          <Text style={[styles.text, darkMode && styles.textDark, styles.productDetails]}>
+          <Text style={[styles.productDetails, darkMode && styles.textDark]}>
             Warna: {item.color || '-'}, Ukuran: {item.size || '-'}, Kode: {item.unit_code || '-'}
           </Text>
-          <Text style={[styles.text, darkMode && styles.textDark, styles.productStock]}>
+          <Text style={[styles.productStock, darkMode && styles.textDark]}>
             Stok: {item.stock || 0}
           </Text>
-          <Text style={[styles.text, darkMode && styles.textDark, styles.productPrice]}>
+          <Text style={[styles.productPrice, darkMode && styles.textDark]}>
             {item.discount_price
               ? formatRupiah(item.discount_price)
               : formatRupiah(item.selling_price)}
           </Text>
         </View>
         <TouchableOpacity
-          style={[styles.button, darkMode && styles.buttonDark, styles.addButton]}
+          style={[styles.addButton, darkMode && styles.buttonDark]}
           onPress={() => addToCart(item)}
           activeOpacity={0.7}
         >
@@ -643,12 +640,12 @@ const TransactionCreate: React.FC<Props> = ({ navigation }) => {
     () => (
       <View>
         <View style={styles.header}>
-          <Text style={[styles.headerText, darkMode && styles.textDark]}>
-            Buat Transaksi Baru
+          <Text style={[styles.headerText, darkMode && styles.headerTextDark]}>
+            BUAT TRANSAKSI BARU
           </Text>
           <View style={styles.headerButtons}>
             <TouchableOpacity onPress={() => setDarkMode(!darkMode)}>
-              <Text style={styles.text}>{darkMode ? '☀️' : '🌙'}</Text>
+              <Text style={styles.modeToggle}>{darkMode ? '☀️' : '🌙'}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.backButton}
@@ -666,7 +663,7 @@ const TransactionCreate: React.FC<Props> = ({ navigation }) => {
         </View>
 
         {errorMessage && (
-          <View style={[styles.card, darkMode && styles.cardDark]}>
+          <View style={[styles.card, darkMode && styles.cardDark, styles.errorCard]}>
             <Text style={[styles.text, darkMode && styles.textDark]}>
               {errorMessage}
             </Text>
@@ -703,7 +700,7 @@ const TransactionCreate: React.FC<Props> = ({ navigation }) => {
           </View>
         ) : (
           <View style={[styles.card, darkMode && styles.cardDark, styles.productListContainer]}>
-            <Text style={[styles.fieldLabel, darkMode && styles.textDark]}>
+            <Text style={[styles.fieldLabel, darkMode && styles.fieldLabelDark]}>
               Pilih Unit Produk
             </Text>
             <TouchableOpacity
@@ -740,7 +737,7 @@ const TransactionCreate: React.FC<Props> = ({ navigation }) => {
                     value={searchQuery}
                     onChangeText={setSearchQuery}
                     placeholder="Cari nama, brand, model, warna, ukuran, atau kode unit..."
-                    placeholderTextColor={darkMode ? '#aaa' : '#8892B0'}
+                    placeholderTextColor={darkMode ? '#9CA3AF' : '#9CA3AF'}
                   />
                   <View style={[styles.scrollContainer, darkMode && styles.scrollContainerDark]}>
                     <FlatList
@@ -765,7 +762,7 @@ const TransactionCreate: React.FC<Props> = ({ navigation }) => {
                     <View style={[styles.card, darkMode && styles.cardDark]}>
                       <ActivityIndicator
                         size="large"
-                        color={darkMode ? '#FBBF24' : '#FF6B35'}
+                        color={darkMode ? '#FFFFFF' : '#3B82F6'}
                       />
                       <Text style={[styles.text, darkMode && styles.textDark]}>
                         Memuat...
@@ -840,121 +837,188 @@ const TransactionCreate: React.FC<Props> = ({ navigation }) => {
   const scanWindowSize = Math.min(width, height) * 0.6;
 
   const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#2A3441' },
-    containerDark: { backgroundColor: '#1E2A3A' },
+    container: {
+      flex: 1,
+      backgroundColor: '#F3F4F6',
+      padding: 16,
+    },
+    containerDark: {
+      backgroundColor: '#1F2937',
+    },
     header: {
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'center',
-      padding: 16,
+      marginBottom: 24,
     },
     headerButtons: {
       flexDirection: 'row',
       alignItems: 'center',
     },
-    headerText: { fontSize: 24, fontWeight: 'bold', color: '#FF6B35' },
-    card: {
-      padding: 16,
-      margin: 8,
-      backgroundColor: '#1E2A3A',
-      borderRadius: 8,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.25,
-      shadowRadius: 3.84,
-      elevation: 5,
+    headerText: {
+      fontSize: 20,
+      fontWeight: '700',
+      color: '#1E3A8A',
+      textTransform: 'uppercase',
     },
-    cardDark: { backgroundColor: '#2A3441' },
-    text: { fontSize: 16, color: '#8892B0' },
-    textDark: { color: '#E8E8E8' },
-    fieldLabel: {
-      fontSize: 16,
-      color: '#FF6B35',
-      marginBottom: 8,
-      marginLeft: 5,
+    headerTextDark: {
+      color: '#FFFFFF',
     },
-    input: {
-      borderWidth: 1,
-      borderColor: '#ccc',
-      padding: 8,
-      marginVertical: 8,
-      borderRadius: 8,
-      backgroundColor: '#E8E8E8',
-      color: '#2A3441',
+    modeToggle: {
+      fontSize: 24,
+      marginRight: 8,
     },
-    inputDark: { borderColor: '#666', backgroundColor: '#E8E8E8', color: '#2A3441' },
-    button: {
-      backgroundColor: '#FF6B35',
-      padding: 8,
-      borderRadius: 8,
-      margin: 4,
-      alignItems: 'center',
-    },
-    buttonDark: { backgroundColor: '#FF6B35' },
     backButton: {
-      backgroundColor: '#FF6B35',
+      backgroundColor: '#2563EB',
       padding: 8,
       borderRadius: 8,
       marginLeft: 8,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.3,
+      shadowRadius: 4,
+      elevation: 4,
+    },
+    button: {
+      backgroundColor: '#2563EB',
+      padding: 12,
+      borderRadius: 8,
+      alignItems: 'center',
+      marginVertical: 4,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.3,
+      shadowRadius: 4,
+      elevation: 4,
+    },
+    buttonDark: {
+      backgroundColor: '#1E3A8A',
     },
     removeButton: {
       position: 'absolute',
       top: 8,
       right: 8,
-      backgroundColor: '#ff0000',
+      backgroundColor: '#DC2626',
       padding: 4,
       borderRadius: 4,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.3,
+      shadowRadius: 4,
+      elevation: 4,
     },
-    buttonText: { color: '#FFFFFF', fontWeight: 'bold' },
-    modal: { flex: 1, justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.5)' },
+    buttonText: {
+      color: '#FFFFFF',
+      fontSize: 14,
+      fontWeight: '600',
+    },
+    card: {
+      padding: 16,
+      marginVertical: 8,
+      backgroundColor: '#FFFFFF',
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: '#BFDBFE',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.3,
+      shadowRadius: 4,
+      elevation: 4,
+    },
+    cardDark: {
+      backgroundColor: '#2A3441',
+      borderColor: '#93C5FD',
+    },
+    errorCard: {
+      borderColor: '#DC2626',
+      borderWidth: 2,
+    },
+    text: {
+      fontSize: 14,
+      color: '#1F2937',
+    },
+    textDark: {
+      color: '#FFFFFF',
+    },
+    fieldLabel: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: '#1E3A8A',
+      marginBottom: 8,
+      marginLeft: 5,
+    },
+    fieldLabelDark: {
+      color: '#FFFFFF',
+    },
+    input: {
+      borderWidth: 1,
+      borderColor: '#93C5FD',
+      padding: 8,
+      marginVertical: 8,
+      borderRadius: 8,
+      backgroundColor: '#1F2937',
+      color: '#FFFFFF',
+    },
+    inputDark: {
+      borderColor: '#93C5FD',
+      backgroundColor: '#2A3441',
+    },
+    modal: {
+      flex: 1,
+      justifyContent: 'center',
+      backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    },
     productListContainer: {
       paddingBottom: 16,
     },
     dropdownButton: {
-      borderWidth: 1,
-      borderColor: '#ccc',
       padding: 12,
       borderRadius: 8,
-      backgroundColor: '#1E2A3A',
+      backgroundColor: '#2563EB',
       marginVertical: 8,
       alignItems: 'center',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.3,
+      shadowRadius: 4,
+      elevation: 4,
     },
     dropdownButtonDark: {
-      borderColor: '#666',
-      backgroundColor: '#2A3441',
+      backgroundColor: '#1E3A8A',
     },
     dropdownModal: {
       flex: 1,
       justifyContent: 'center',
-      backgroundColor: 'rgba(0,0,0,0.5)',
+      backgroundColor: 'rgba(0, 0, 0, 0.6)',
     },
     dropdownContainer: {
       margin: 20,
       padding: 16,
-      backgroundColor: '#1E2A3A',
+      backgroundColor: '#FFFFFF',
       borderRadius: 12,
       maxHeight: '80%',
       width: '90%',
       alignSelf: 'center',
       shadowColor: '#000',
       shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.25,
-      shadowRadius: 3.84,
-      elevation: 5,
+      shadowOpacity: 0.3,
+      shadowRadius: 8,
+      elevation: 6,
     },
     dropdownContainerDark: {
       backgroundColor: '#2A3441',
+      borderColor: '#93C5FD',
     },
     scrollContainer: {
       borderWidth: 1,
-      borderColor: '#ccc',
+      borderColor: '#BFDBFE',
       borderRadius: 8,
-      backgroundColor: '#1E2A3A',
+      backgroundColor: '#FFFFFF',
       marginVertical: 8,
       maxHeight: '60%',
     },
     scrollContainerDark: {
-      borderColor: '#666',
+      borderColor: '#93C5FD',
       backgroundColor: '#2A3441',
     },
     productListContent: {
@@ -966,42 +1030,60 @@ const TransactionCreate: React.FC<Props> = ({ navigation }) => {
       alignItems: 'center',
       padding: 12,
       marginVertical: 4,
-      backgroundColor: '#2A3441',
+      backgroundColor: '#FFFFFF',
       borderRadius: 8,
       borderWidth: 1,
-      borderColor: '#ccc',
+      borderColor: '#BFDBFE',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.3,
+      shadowRadius: 4,
+      elevation: 4,
     },
     productCardDark: {
-      backgroundColor: '#1E2A3A',
-      borderColor: '#666',
+      backgroundColor: '#2A3441',
+      borderColor: '#93C5FD',
     },
     productCardContent: {
       flex: 1,
       marginRight: 8,
     },
     productName: {
-      fontWeight: 'bold',
+      fontSize: 16,
+      fontWeight: '600',
+      color: '#1F2937',
       marginBottom: 4,
     },
     productDetails: {
       fontSize: 14,
+      color: '#1F2937',
       marginBottom: 4,
     },
     productStock: {
       fontSize: 14,
+      color: '#1F2937',
       marginBottom: 4,
     },
     productPrice: {
-      fontWeight: 'bold',
-      color: '#FF6B35',
+      fontSize: 14,
+      fontWeight: '600',
+      color: '#1E3A8A',
     },
     addButton: {
       paddingVertical: 6,
       paddingHorizontal: 12,
+      backgroundColor: '#2563EB',
+      borderRadius: 8,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.3,
+      shadowRadius: 4,
+      elevation: 4,
     },
     emptyText: {
       textAlign: 'center',
       padding: 16,
+      color: '#9CA3AF',
     },
     cameraContainer: {
       flex: 1,
@@ -1018,7 +1100,7 @@ const TransactionCreate: React.FC<Props> = ({ navigation }) => {
     },
     topOverlay: {
       flex: 1,
-      backgroundColor: 'rgba(0,0,0,0.6)',
+      backgroundColor: 'rgba(0, 0, 0, 0.6)',
       width: '100%',
     },
     middleOverlay: {
@@ -1028,22 +1110,22 @@ const TransactionCreate: React.FC<Props> = ({ navigation }) => {
     },
     leftOverlay: {
       flex: 1,
-      backgroundColor: 'rgba(0,0,0,0.6)',
+      backgroundColor: 'rgba(0, 0, 0, 0.6)',
     },
     scanWindow: {
       width: scanWindowSize,
       height: scanWindowSize,
       borderWidth: 2,
-      borderColor: '#FF6B35',
+      borderColor: '#FFFFFF',
       backgroundColor: 'transparent',
     },
     rightOverlay: {
       flex: 1,
-      backgroundColor: 'rgba(0,0,0,0.6)',
+      backgroundColor: 'rgba(0, 0, 0, 0.6)',
     },
     bottomOverlay: {
       flex: 1,
-      backgroundColor: 'rgba(0,0,0,0.6)',
+      backgroundColor: 'rgba(0, 0, 0, 0.6)',
       width: '100%',
     },
     cameraInstruction: {
@@ -1062,147 +1144,156 @@ const TransactionCreate: React.FC<Props> = ({ navigation }) => {
 
   return (
     <SafeAreaView style={[styles.container, darkMode && styles.containerDark]}>
-      <FlatList
-        data={[]}
-        renderItem={() => null}
-        keyExtractor={(_, index) => index.toString()}
-        ListHeaderComponent={renderHeader}
-        ListFooterComponent={
-          <View>
-            <View style={[styles.card, darkMode && styles.cardDark]}>
-              <Text style={[styles.fieldLabel, darkMode && styles.textDark]}>
-                Informasi Pelanggan
-              </Text>
-              <TextInput
-                style={[styles.input, darkMode && styles.inputDark]}
-                value={customerName}
-                onChangeText={handleCustomerNameChange}
-                placeholder="Nama Pelanggan"
-                placeholderTextColor={darkMode ? '#aaa' : '#8892B0'}
-              />
-              <TextInput
-                style={[styles.input, darkMode && styles.inputDark]}
-                value={customerPhone}
-                onChangeText={handleCustomerPhoneChange}
-                placeholder="No. Telepon"
-                placeholderTextColor={darkMode ? '#aaa' : '#8892B0'}
-                keyboardType="phone-pad"
-              />
-              <TextInput
-                style={[styles.input, darkMode && styles.inputDark]}
-                value={customerEmail}
-                onChangeText={handleCustomerEmailChange}
-                placeholder="Email Pelanggan"
-                placeholderTextColor={darkMode ? '#aaa' : '#8892B0'}
-                keyboardType="email-address"
-              />
-              <Picker
-                selectedValue={paymentMethod}
-                onValueChange={(value) => {
-                  setPaymentMethod(value);
-                  if (value !== 'debit') setCardType('');
-                }}
-                style={[styles.input, darkMode && styles.inputDark]}
-              >
-                <Picker.Item label="Pilih metode pembayaran" value="" />
-                <Picker.Item label="Tunai" value="cash" />
-                <Picker.Item label="QRIS" value="qris" />
-                <Picker.Item label="Debit" value="debit" />
-                <Picker.Item label="Transfer Bank" value="transfer" />
-              </Picker>
-              {paymentMethod === 'debit' && (
-                <Picker
-                  selectedValue={cardType}
-                  onValueChange={setCardType}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={{ flex: 1 }}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 20}
+      >
+        <FlatList
+          data={[]}
+          renderItem={() => null}
+          keyExtractor={(_, index) => index.toString()}
+          ListHeaderComponent={renderHeader}
+          ListFooterComponent={
+            <View>
+              <View style={[styles.card, darkMode && styles.cardDark]}>
+                <Text style={[styles.fieldLabel, darkMode && styles.fieldLabelDark]}>
+                  Informasi Pelanggan
+                </Text>
+                <TextInput
                   style={[styles.input, darkMode && styles.inputDark]}
-                >
-                  <Picker.Item label="Pilih tipe kartu" value="" />
-                  <Picker.Item label="Mandiri" value="Mandiri" />
-                  <Picker.Item label="BRI" value="BRI" />
-                  <Picker.Item label="BCA" value="BCA" />
-                </Picker>
-              )}
-              <TextInput
-                style={[styles.input, darkMode && styles.inputDark, { height: 100 }]}
-                value={notes}
-                onChangeText={handleNotesChange}
-                placeholder="Catatan"
-                placeholderTextColor={darkMode ? '#aaa' : '#8892B0'}
-                multiline
-              />
-            </View>
-
-            <View style={[styles.card, darkMode && styles.cardDark]}>
-              <Text style={[styles.fieldLabel, darkMode && styles.textDark]}>
-                Keranjang Belanja
-              </Text>
-              {cart.length === 0 ? (
-                <View style={[styles.card, darkMode && styles.cardDark]}>
-                  <Text style={[styles.text, darkMode && styles.textDark]}>
-                    Keranjang Kosong
-                  </Text>
-                  <Text style={[styles.text, darkMode && styles.textDark]}>
-                    Tambahkan unit produk dari daftar
-                  </Text>
-                </View>
-              ) : (
-                <FlatList
-                  data={cart}
-                  renderItem={renderCartItem}
-                  keyExtractor={(_, index) => index.toString()}
-                  style={{ maxHeight: 200 }}
+                  value={customerName}
+                  onChangeText={handleCustomerNameChange}
+                  placeholder="Nama Pelanggan"
+                  placeholderTextColor={darkMode ? '#9CA3AF' : '#9CA3AF'}
                 />
-              )}
-              <View style={{ marginTop: 16 }}>
-                <Text style={[styles.text, darkMode && styles.textDark]}>
-                  Subtotal: {formatRupiah(calculateSubtotal())}
-                </Text>
-                <Text style={[styles.text, darkMode && styles.textDark]}>
-                  Diskon: {formatRupiah(calculateDiscount())}
-                </Text>
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  <Text style={[styles.text, darkMode && styles.textDark]}>
-                    Harga Baru:{' '}
-                  </Text>
-                  <TextInput
-                    style={[styles.input, darkMode && styles.inputDark, { flex: 1 }]}
-                    value={newTotal}
-                    onChangeText={handleNewTotalChange}
-                    placeholder="Masukkan harga baru"
-                    placeholderTextColor={darkMode ? '#aaa' : '#8892B0'}
-                    keyboardType="numeric"
-                  />
-                </View>
-                <Text
-                  style={[styles.text, darkMode && styles.textDark, { fontWeight: 'bold' }]}
+                <TextInput
+                  style={[styles.input, darkMode && styles.inputDark]}
+                  value={customerPhone}
+                  onChangeText={handleCustomerPhoneChange}
+                  placeholder="No. Telepon"
+                  placeholderTextColor={darkMode ? '#9CA3AF' : '#9CA3AF'}
+                  keyboardType="phone-pad"
+                />
+                <TextInput
+                  style={[styles.input, darkMode && styles.inputDark]}
+                  value={customerEmail}
+                  onChangeText={handleCustomerEmailChange}
+                  placeholder="Email Pelanggan"
+                  placeholderTextColor={darkMode ? '#9CA3AF' : '#9CA3AF'}
+                  keyboardType="email-address"
+                />
+                <Picker
+                  selectedValue={paymentMethod}
+                  onValueChange={(value) => {
+                    setPaymentMethod(value);
+                    if (value !== 'debit') setCardType('');
+                  }}
+                  style={[styles.input, darkMode && styles.inputDark]}
+                  dropdownIconColor={darkMode ? '#FFFFFF' : '#FFFFFF'}
                 >
-                  Total Bayar: {formatRupiah(calculateTotal())}
-                </Text>
-                <TouchableOpacity
-                  style={[
-                    styles.button,
-                    darkMode && styles.buttonDark,
-                    { opacity: cart.length === 0 || loading ? 0.5 : 1 },
-                  ]}
-                  onPress={submitTransaction}
-                  disabled={cart.length === 0 || loading}
-                >
-                  <Text style={styles.buttonText}>
-                    {loading ? 'Memproses...' : 'Proses Transaksi'}
-                  </Text>
-                </TouchableOpacity>
+                  <Picker.Item label="Pilih metode pembayaran" value="" />
+                  <Picker.Item label="Tunai" value="cash" />
+                  <Picker.Item label="QRIS" value="qris" />
+                  <Picker.Item label="Debit" value="debit" />
+                  <Picker.Item label="Transfer Bank" value="transfer" />
+                </Picker>
+                {paymentMethod === 'debit' && (
+                  <Picker
+                    selectedValue={cardType}
+                    onValueChange={setCardType}
+                    style={[styles.input, darkMode && styles.inputDark]}
+                    dropdownIconColor={darkMode ? '#FFFFFF' : '#FFFFFF'}
+                  >
+                    <Picker.Item label="Pilih tipe kartu" value="" />
+                    <Picker.Item label="Mandiri" value="Mandiri" />
+                    <Picker.Item label="BRI" value="BRI" />
+                    <Picker.Item label="BCA" value="BCA" />
+                  </Picker>
+                )}
+                <TextInput
+                  style={[styles.input, darkMode && styles.inputDark, { height: 100 }]}
+                  value={notes}
+                  onChangeText={handleNotesChange}
+                  placeholder="Catatan"
+                  placeholderTextColor={darkMode ? '#9CA3AF' : '#9CA3AF'}
+                  multiline
+                />
               </View>
+
+              <View style={[styles.card, darkMode && styles.cardDark]}>
+                <Text style={[styles.fieldLabel, darkMode && styles.fieldLabelDark]}>
+                  Keranjang Belanja
+                </Text>
+                {cart.length === 0 ? (
+                  <View style={[styles.card, darkMode && styles.cardDark]}>
+                    <Text style={[styles.text, darkMode && styles.textDark]}>
+                      Keranjang Kosong
+                    </Text>
+                    <Text style={[styles.text, darkMode && styles.textDark]}>
+                      Tambahkan unit produk dari daftar
+                    </Text>
+                  </View>
+                ) : (
+                  <FlatList
+                    data={cart}
+                    renderItem={renderCartItem}
+                    keyExtractor={(_, index) => index.toString()}
+                    style={{ maxHeight: 200 }}
+                  />
+                )}
+                <View style={{ marginTop: 16 }}>
+                  <Text style={[styles.text, darkMode && styles.textDark]}>
+                    Subtotal: {formatRupiah(calculateSubtotal())}
+                  </Text>
+                  <Text style={[styles.text, darkMode && styles.textDark]}>
+                    Diskon: {formatRupiah(calculateDiscount())}
+                  </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <Text style={[styles.text, darkMode && styles.textDark]}>
+                      Harga Baru:{' '}
+                    </Text>
+                    <TextInput
+                      style={[styles.input, darkMode && styles.inputDark, { flex: 1 }]}
+                      value={newTotal}
+                      onChangeText={handleNewTotalChange}
+                      placeholder="Masukkan harga baru"
+                      placeholderTextColor={darkMode ? '#9CA3AF' : '#9CA3AF'}
+                      keyboardType="numeric"
+                    />
+                  </View>
+                  <Text
+                    style={[styles.text, darkMode && styles.textDark, { fontWeight: '600' }]}
+                  >
+                    Total Bayar: {formatRupiah(calculateTotal())}
+                  </Text>
+                  <TouchableOpacity
+                    style={[
+                      styles.button,
+                      darkMode && styles.buttonDark,
+                      { opacity: cart.length === 0 || loading ? 0.5 : 1 },
+                    ]}
+                    onPress={submitTransaction}
+                    disabled={cart.length === 0 || loading}
+                  >
+                    <Text style={styles.buttonText}>
+                      {loading ? 'Memproses...' : 'Proses Transaksi'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+              <View style={{ height: 20 }} />
             </View>
-            <View style={{ height: 20 }} />
-          </View>
-        }
-        ListFooterComponentStyle={{ flexGrow: 1 }}
-      />
+          }
+          ListFooterComponentStyle={{ flexGrow: 1 }}
+          keyboardShouldPersistTaps="handled"
+        />
+      </KeyboardAvoidingView>
       <Modal visible={showPopup} transparent animationType="fade">
         <View style={styles.modal}>
-          <View style={[styles.card, darkMode && styles.cardDark]}>
+          <View style={[styles.card, darkMode && styles.cardDark, popupType === 'error' && styles.errorCard]}>
             <Text
-              style={[styles.text, darkMode && styles.textDark, { fontWeight: 'bold' }]}
+              style={[styles.text, darkMode && styles.textDark, { fontWeight: '600', color: popupType === 'error' ? '#DC2626' : '#1E3A8A' }]}
             >
               {popupTitle}
             </Text>
