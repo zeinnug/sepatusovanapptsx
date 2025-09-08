@@ -1,23 +1,23 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import {
-  View,
-  Text,
-  FlatList,
-  TouchableOpacity,
-  StyleSheet,
-  TextInput,
-  SafeAreaView,
-  Modal,
-  ActivityIndicator,
-  Dimensions,
-  KeyboardAvoidingView,
-  Platform,
-} from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Picker } from '@react-native-picker/picker';
-import axios, { AxiosError } from 'axios';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import axios, { AxiosError } from 'axios';
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import React, { useCallback, useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  Dimensions,
+  FlatList,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 
 // Define types
 type RootStackParamList = {
@@ -425,7 +425,7 @@ const TransactionCreate: React.FC<Props> = ({ navigation }) => {
         })),
       };
 
-      const response = await axios.post('https://testingaplikasi.tokosepatusovan.com/api/transactions', payload, {
+      const response = await axios.post('https://testingaplikasi.tokosepatusovan.com/api/transactions/', payload, {
         headers: {
           'Content-Type': 'application/json',
           Accept: 'application/json',
