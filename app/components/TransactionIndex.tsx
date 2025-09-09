@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,16 +8,18 @@ import {
   TouchableOpacity,
   Platform,
   Alert,
+  Modal,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Picker } from '@react-native-picker/picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { NativeStackNavigationProp, NativeStackScreenProps } from '@react-navigation/native-stack';
+import { useFocusEffect, useRoute } from '@react-navigation/native';
 import * as Print from 'expo-print';
 
 // Navigation param list
 type RootStackParamList = {
-  TransactionIndex: undefined;
+  TransactionIndex: { showPrint?: boolean };
   TransactionCreate: undefined;
 };
 
@@ -87,19 +89,28 @@ const TransactionIndex: React.FC<Props> = ({ navigation }) => {
     { name: string; url: string } | undefined
   >();
   const [currentTime, setCurrentTime] = useState<Date>(new Date());
+  const [showPrintPopup, setShowPrintPopup] = useState<boolean>(false);
+  const route = useRoute<NativeStackScreenProps<RootStackParamList, 'TransactionIndex'>['route']>();
 
   const paymentMethods = ['Semua Metode', 'cash', 'qris', 'Transfer Bank'];
   const paymentStatuses = ['Semua Status', 'paid', 'unpaid'];
   const WIB_OFFSET = 7 * 60 * 60 * 1000; // UTC+7 in milliseconds
-  const API_URL = 'https://testingaplikasi.tokosepatusovan.com/api/transactions/';
+  const API_URL = 'https://testingaplikasi.tokosepatusovan.com/api/transactions';
 
   // Update waktu real-time setiap menit (sesuai Dashboard)
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(new Date());
-    }, 60000); // Perbarui setiap menit, sesuai Dashboard
+    }, 60000); // Perbarui setiap menit
     return () => clearInterval(timer);
   }, []);
+
+  // Check for navigation params to show print popup
+  useEffect(() => {
+    if (route.params?.showPrint && transactions.length > 0) {
+      setShowPrintPopup(true);
+    }
+  }, [route.params, transactions]);
 
   // Format date to YYYY-MM-DD in WIB
   const formatDateWIB = (date: Date): string => {
@@ -143,6 +154,7 @@ const TransactionIndex: React.FC<Props> = ({ navigation }) => {
 
       const params = new URLSearchParams();
       params.append('date', formatDateWIB(filterDate));
+      params.append('no_cache', 'true'); // Nonaktifkan cache untuk data fresh
       if (filterPaymentMethod !== 'Semua Metode') {
         params.append('payment_method', filterPaymentMethod);
       }
@@ -183,9 +195,12 @@ const TransactionIndex: React.FC<Props> = ({ navigation }) => {
     }
   };
 
-  useEffect(() => {
-    fetchTransactions();
-  }, [filterDate, filterPaymentMethod, filterPaymentStatus]);
+  // Refresh data when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      fetchTransactions();
+    }, [filterDate, filterPaymentMethod, filterPaymentStatus])
+  );
 
   const onDateChange = (event: any, selectedDate?: Date) => {
     setShowDatePicker(Platform.OS === 'ios');
@@ -328,6 +343,13 @@ const TransactionIndex: React.FC<Props> = ({ navigation }) => {
     setFilterDate(new Date());
     setFilterPaymentMethod('Semua Metode');
     setFilterPaymentStatus('Semua Status');
+  };
+
+  const handlePrintNewTransaction = () => {
+    if (transactions.length > 0) {
+      printReceipt(transactions[0]); // Print transaksi terbaru
+    }
+    setShowPrintPopup(false);
   };
 
   const renderTransaction = ({ item }: { item: Transaction }) => (
@@ -503,6 +525,39 @@ const TransactionIndex: React.FC<Props> = ({ navigation }) => {
       >
         <Text style={styles.createButtonText}>+ BUAT TRANSAKSI BARU</Text>
       </TouchableOpacity>
+
+      <Modal
+        visible={showPrintPopup}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowPrintPopup(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.printPopupContainer}>
+            <Text style={styles.printPopupTitle}>Transaksi Berhasil!</Text>
+            <Text style={styles.printPopupMessage}>
+              Transaksi baru telah dibuat. Apakah Anda ingin mencetak struk sekarang?
+            </Text>
+            <View style={styles.printPopupButtons}>
+              <TouchableOpacity
+                style={[styles.printPopupButton, styles.cancelButton]}
+                onPress={() => setShowPrintPopup(false)}
+              >
+                <Text style={styles.cancelButtonText}>Batal</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.printPopupButton, styles.modalPrintButton]}
+                onPress={handlePrintNewTransaction}
+                disabled={printing}
+              >
+                <Text style={styles.printButtonText}>
+                  {printing ? 'Mencetak...' : 'Cetak Struk'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -839,6 +894,61 @@ const styles = StyleSheet.create({
   },
   listContainer: {
     paddingBottom: 80,
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  printPopupContainer: {
+    backgroundColor: '#FFFFFF',
+    padding: 20,
+    borderRadius: 12,
+    alignItems: 'center',
+    width: '80%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  printPopupTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1E3A8A',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  printPopupMessage: {
+    fontSize: 16,
+    color: '#1F2937',
+    textAlign: 'center',
+    marginBottom: 16,
+    lineHeight: 20,
+  },
+  printPopupButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
+  },
+  printPopupButton: {
+    flex: 1,
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginHorizontal: 4,
+  },
+  cancelButton: {
+    backgroundColor: '#9CA3AF',
+  },
+  modalPrintButton: {
+    backgroundColor: '#2563EB',
+  },
+  cancelButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
 

@@ -164,6 +164,7 @@ const TransactionCreate: React.FC<Props> = ({ navigation }) => {
         setErrorMessage('Token tidak ditemukan. Silakan login kembali.');
         throw new Error('Token autentikasi tidak ditemukan.');
       }
+      console.log('Fetching units with token:', token);
 
       let allProducts: Unit[] = [];
       let currentPage = 1;
@@ -185,6 +186,8 @@ const TransactionCreate: React.FC<Props> = ({ navigation }) => {
             'Cache-Control': 'no-cache',
           },
         });
+
+        console.log('Fetch units response:', response.data);
 
         const productData = response.data.data?.products || [];
         if (!Array.isArray(productData)) {
@@ -238,6 +241,7 @@ const TransactionCreate: React.FC<Props> = ({ navigation }) => {
       const message =
         axiosError.response?.data?.message ||
         'Gagal mengambil data produk. Silakan coba lagi.';
+      console.error('Fetch units error:', axiosError.response?.data);
       setErrorMessage(message);
       if (axiosError.response?.status === 401) {
         await AsyncStorage.removeItem('token');
@@ -409,6 +413,7 @@ const TransactionCreate: React.FC<Props> = ({ navigation }) => {
         setErrorMessage('Token tidak ditemukan. Silakan login kembali.');
         throw new Error('Token autentikasi tidak ditemukan.');
       }
+      console.log('Submitting transaction with token:', token);
 
       const payload = {
         customer_name: customerName || null,
@@ -425,13 +430,17 @@ const TransactionCreate: React.FC<Props> = ({ navigation }) => {
         })),
       };
 
-      const response = await axios.post('https://testingaplikasi.tokosepatusovan.com/api/transactions/', payload, {
+      console.log('Transaction payload:', payload);
+
+      const response = await axios.post('https://testingaplikasi.tokosepatusovan.com/api/transactions', payload, {
         headers: {
           'Content-Type': 'application/json',
           Accept: 'application/json',
           Authorization: `Bearer ${token}`,
         },
       });
+
+      console.log('Transaction response:', response.data);
 
       if (!response.data.success) {
         throw new Error(response.data.message || 'Gagal membuat transaksi.');
@@ -452,6 +461,7 @@ const TransactionCreate: React.FC<Props> = ({ navigation }) => {
       const message =
         axiosError.response?.data?.message ||
         'Gagal membuat transaksi. Silakan coba lagi.';
+      console.error('Transaction error:', axiosError.response?.data);
       showPopupMessage('Gagal Membuat Transaksi', message, 'error');
       if (axiosError.response?.status === 401) {
         await AsyncStorage.removeItem('token');
@@ -482,6 +492,8 @@ const TransactionCreate: React.FC<Props> = ({ navigation }) => {
     async ({ type, data }: { type: string; data: string }) => {
       if (hasScanned) return;
       setHasScanned(true);
+
+      console.log('Barcode scanned:', { type, data });
 
       const scannedCode = data.trim();
       let unitCode: string | null = null;
