@@ -22,7 +22,12 @@
         "BLUETOOTH",
         "BLUETOOTH_ADMIN",
         "BLUETOOTH_CONNECT",
-        "BLUETOOTH_SCAN"
+        "BLUETOOTH_SCAN",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.BLUETOOTH",
+        "android.permission.BLUETOOTH_ADMIN",
+        "android.permission.BLUETOOTH_CONNECT"
       ]
     },
     "web": {
@@ -51,6 +56,12 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "788f0209-cefa-4c02-92f1-366b7f13db9a"
+      }
     }
   }
 }
