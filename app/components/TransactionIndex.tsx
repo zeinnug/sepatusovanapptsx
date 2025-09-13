@@ -97,11 +97,11 @@ const TransactionIndex: React.FC<Props> = ({ navigation }) => {
   const WIB_OFFSET = 7 * 60 * 60 * 1000; // UTC+7 in milliseconds
   const API_URL = 'https://testingaplikasi.tokosepatusovan.com/api/transactions';
 
-  // Update waktu real-time setiap menit (sesuai Dashboard)
+  // Update waktu real-time setiap detik
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(new Date());
-    }, 60000); // Perbarui setiap menit
+    }, 1000); // Perbarui setiap 1 detik
     return () => clearInterval(timer);
   }, []);
 
@@ -112,7 +112,7 @@ const TransactionIndex: React.FC<Props> = ({ navigation }) => {
     }
   }, [route.params, transactions]);
 
-  // Format date to YYYY-MM-DD in WIB
+  // Format date to YYYY-MM-DD in WIB for API
   const formatDateWIB = (date: Date): string => {
     const wibDate = new Date(date.getTime() + WIB_OFFSET);
     return `${wibDate.getUTCFullYear()}-${(wibDate.getUTCMonth() + 1)
@@ -120,19 +120,19 @@ const TransactionIndex: React.FC<Props> = ({ navigation }) => {
       .padStart(2, '0')}-${wibDate.getUTCDate().toString().padStart(2, '0')}`;
   };
 
-  // Format date and time for display (dd MMMM yyyy HH:mm)
+  // Format date and time for display (use device timezone, assuming WIB)
   const formatDisplayDate = (date: Date): string => {
-    const wibDate = new Date(date.getTime() + WIB_OFFSET);
-    return wibDate.toLocaleString('id-ID', {
+    return date.toLocaleString('id-ID', {
       day: '2-digit',
       month: 'long',
       year: 'numeric',
       hour: '2-digit',
       minute: '2-digit',
+      second: '2-digit',
     });
   };
 
-  // Format invoice number (INV-DDMMYYYY)
+  // Format invoice number
   const formatInvoiceNumber = (date: string): string => {
     const wibDate = new Date(new Date(date).getTime() + WIB_OFFSET);
     const day = wibDate.getUTCDate().toString().padStart(2, '0');
@@ -154,7 +154,7 @@ const TransactionIndex: React.FC<Props> = ({ navigation }) => {
 
       const params = new URLSearchParams();
       params.append('date', formatDateWIB(filterDate));
-      params.append('no_cache', 'true'); // Nonaktifkan cache untuk data fresh
+      params.append('no_cache', 'true');
       if (filterPaymentMethod !== 'Semua Metode') {
         params.append('payment_method', filterPaymentMethod);
       }
@@ -347,7 +347,7 @@ const TransactionIndex: React.FC<Props> = ({ navigation }) => {
 
   const handlePrintNewTransaction = () => {
     if (transactions.length > 0) {
-      printReceipt(transactions[0]); // Print transaksi terbaru
+      printReceipt(transactions[0]);
     }
     setShowPrintPopup(false);
   };
@@ -355,31 +355,42 @@ const TransactionIndex: React.FC<Props> = ({ navigation }) => {
   const renderTransaction = ({ item }: { item: Transaction }) => (
     <View style={styles.transactionCard}>
       <View style={styles.transactionCardGradient}>
-        <Text style={styles.invoiceText}>{formatInvoiceNumber(item.created_at)}</Text>
-        <Text style={styles.customerText}>Customer: {item.customer_name}</Text>
-        <Text style={styles.amountText}>
-          Total: Rp {item.final_amount.toLocaleString('id-ID')}
-        </Text>
-        <Text style={styles.paymentText}>Payment: {item.payment_method}</Text>
-        <Text style={styles.dateText}>
-          Date: {formatDisplayDate(new Date(item.created_at))}
-        </Text>
+        <View style={styles.transactionHeader}>
+          <Text style={styles.invoiceText}>{formatInvoiceNumber(item.created_at)}</Text>
+          <Text style={styles.dateText}>
+            {formatDisplayDate(new Date(item.created_at))}
+          </Text>
+        </View>
+        <View style={styles.transactionDetails}>
+          <Text style={styles.customerText}>Customer: {item.customer_name}</Text>
+          <Text style={styles.paymentText}>Payment: {item.payment_method}</Text>
+          <Text style={styles.amountText}>
+            Total: Rp {item.final_amount.toLocaleString('id-ID')}
+          </Text>
+        </View>
         <View style={styles.itemsContainer}>
           <Text style={styles.itemsTitle}>Items:</Text>
           {item.items.map((product: TransactionItem) => (
-            <Text key={product.id} style={styles.itemText}>
-              {product.product_name} (Qty: {product.quantity}, Rp{' '}
-              {product.subtotal.toLocaleString('id-ID')})
-            </Text>
+            <View key={product.id} style={styles.itemRow}>
+              <Text style={styles.itemText}>
+                {product.product_name}
+                {product.size ? `, Size: ${product.size}` : ''}
+                {product.color ? `, Color: ${product.color}` : ''}
+              </Text>
+              <Text style={styles.itemText}>
+                Qty: {product.quantity} x Rp {product.price.toLocaleString('id-ID')} = Rp{' '}
+                {product.subtotal.toLocaleString('id-ID')}
+              </Text>
+            </View>
           ))}
         </View>
         <TouchableOpacity
-          style={[styles.printButton, printing && styles.printButtonDisabled]}
+          style={[styles.button, printing && styles.buttonDisabled]}
           onPress={() => printReceipt(item)}
           disabled={printing}
         >
-          <Text style={styles.printButtonText}>
-            {printing ? 'Printing...' : 'Cetak Struk'}
+          <Text style={styles.buttonText}>
+            {printing ? 'Mencetak...' : 'Cetak Struk'}
           </Text>
         </TouchableOpacity>
       </View>
@@ -389,7 +400,7 @@ const TransactionIndex: React.FC<Props> = ({ navigation }) => {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#3B82F6" />
+        <ActivityIndicator size="large" color="#2563EB" />
         <Text style={styles.loadingText}>Memuat Transaksi...</Text>
       </View>
     );
@@ -400,7 +411,7 @@ const TransactionIndex: React.FC<Props> = ({ navigation }) => {
       <View style={styles.errorContainer}>
         <Text style={styles.errorText}>{error}</Text>
         <TouchableOpacity
-          style={styles.retryButton}
+          style={styles.button}
           onPress={() => {
             setLoading(true);
             setError(null);
@@ -418,35 +429,31 @@ const TransactionIndex: React.FC<Props> = ({ navigation }) => {
       <View style={styles.headerContainer}>
         <Text style={styles.title}>@SEPATUBYSOVAN</Text>
         <Text style={styles.subtitle}>
-          Waktu Saat Ini: {formatDisplayDate(currentTime)}
+          {formatDisplayDate(currentTime)}
         </Text>
       </View>
       <View style={styles.buttonContainer}>
-        <TouchableOpacity style={styles.button}>
-          <Text style={styles.buttonText}>SISTEM KASIR</Text>
-          <Text style={styles.buttonSubText}>Daftar Transaksi</Text>
-        </TouchableOpacity>
         <TouchableOpacity
-          style={styles.actionButton}
+          style={[styles.button, styles.actionButton]}
           onPress={() => navigation.navigate('TransactionCreate')}
         >
-          <Text style={styles.actionButtonText}>+ TRANSAKSI BARU</Text>
+          <Text style={styles.buttonText}>+ Transaksi</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.actionButton}>
-          <Text style={styles.actionButtonText}>Laporan Penjualan</Text>
+        <TouchableOpacity style={[styles.button, styles.actionButton]}>
+          <Text style={styles.buttonText}>Laporan</Text>
         </TouchableOpacity>
       </View>
 
       {Platform.OS === 'ios' && (
-        <TouchableOpacity style={styles.selectPrinterButton} onPress={selectPrinter}>
-          <Text style={styles.selectPrinterButtonText}>
+        <TouchableOpacity style={[styles.button, styles.selectPrinterButton]} onPress={selectPrinter}>
+          <Text style={styles.buttonText}>
             {selectedPrinter ? `Printer: ${selectedPrinter.name}` : 'Pilih Printer'}
           </Text>
         </TouchableOpacity>
       )}
 
       <View style={styles.filterContainer}>
-        <Text style={styles.filterTitle}>Filter Transaksi</Text>
+        <Text style={styles.filterTitle}>Filter</Text>
         <View style={styles.filterRow}>
           <View style={styles.filterItem}>
             <Text style={styles.filterLabel}>Tanggal</Text>
@@ -454,7 +461,7 @@ const TransactionIndex: React.FC<Props> = ({ navigation }) => {
               onPress={() => setShowDatePicker(true)}
               style={styles.filterInput}
             >
-              <Text style={styles.dateTextInput}>{formatDisplayDate(filterDate)}</Text>
+              <Text style={styles.filterInputText}>{formatDisplayDate(filterDate)}</Text>
             </TouchableOpacity>
             {showDatePicker && (
               <DateTimePicker
@@ -468,7 +475,7 @@ const TransactionIndex: React.FC<Props> = ({ navigation }) => {
             )}
           </View>
           <View style={styles.filterItem}>
-            <Text style={styles.filterLabel}>Metode Pembayaran</Text>
+            <Text style={styles.filterLabel}>Metode</Text>
             <View style={styles.pickerContainer}>
               <Picker
                 selectedValue={filterPaymentMethod}
@@ -483,7 +490,7 @@ const TransactionIndex: React.FC<Props> = ({ navigation }) => {
             </View>
           </View>
           <View style={styles.filterItem}>
-            <Text style={styles.filterLabel}>Status Pembayaran</Text>
+            <Text style={styles.filterLabel}>Status</Text>
             <View style={styles.pickerContainer}>
               <Picker
                 selectedValue={filterPaymentStatus}
@@ -497,15 +504,15 @@ const TransactionIndex: React.FC<Props> = ({ navigation }) => {
               </Picker>
             </View>
           </View>
-          <TouchableOpacity style={styles.resetButton} onPress={resetFilters}>
-            <Text style={styles.resetButtonText}>Reset Filter</Text>
+          <TouchableOpacity style={[styles.button, styles.resetButton]} onPress={resetFilters}>
+            <Text style={styles.buttonText}>Reset</Text>
           </TouchableOpacity>
         </View>
       </View>
 
       {transactions.length === 0 ? (
         <View style={styles.noTransactions}>
-          <Text style={styles.noTransactionsText}>TIDAK ADA TRANSAKSI</Text>
+          <Text style={styles.noTransactionsText}>Tidak Ada Transaksi</Text>
           <Text style={styles.noTransactionsSubText}>
             Belum ada transaksi untuk filter yang dipilih.
           </Text>
@@ -520,10 +527,10 @@ const TransactionIndex: React.FC<Props> = ({ navigation }) => {
       )}
 
       <TouchableOpacity
-        style={styles.createButton}
+        style={[styles.button, styles.createButton]}
         onPress={() => navigation.navigate('TransactionCreate')}
       >
-        <Text style={styles.createButtonText}>+ BUAT TRANSAKSI BARU</Text>
+        <Text style={styles.buttonText}>+ Buat Transaksi</Text>
       </TouchableOpacity>
 
       <Modal
@@ -533,24 +540,24 @@ const TransactionIndex: React.FC<Props> = ({ navigation }) => {
         onRequestClose={() => setShowPrintPopup(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.printPopupContainer}>
-            <Text style={styles.printPopupTitle}>Transaksi Berhasil!</Text>
-            <Text style={styles.printPopupMessage}>
-              Transaksi baru telah dibuat. Apakah Anda ingin mencetak struk sekarang?
+          <View style={styles.modalContainer}>
+            <Text style={styles.modalTitle}>Transaksi Berhasil!</Text>
+            <Text style={styles.modalMessage}>
+              Transaksi baru telah dibuat. Cetak struk?
             </Text>
-            <View style={styles.printPopupButtons}>
+            <View style={styles.modalButtonContainer}>
               <TouchableOpacity
-                style={[styles.printPopupButton, styles.cancelButton]}
+                style={[styles.button, styles.modalButton, styles.cancelButton]}
                 onPress={() => setShowPrintPopup(false)}
               >
-                <Text style={styles.cancelButtonText}>Batal</Text>
+                <Text style={styles.buttonText}>Batal</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.printPopupButton, styles.modalPrintButton]}
+                style={[styles.button, styles.modalButton, printing && styles.buttonDisabled]}
                 onPress={handlePrintNewTransaction}
                 disabled={printing}
               >
-                <Text style={styles.printButtonText}>
+                <Text style={styles.buttonText}>
                   {printing ? 'Mencetak...' : 'Cetak Struk'}
                 </Text>
               </TouchableOpacity>
@@ -566,94 +573,82 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F3F4F6',
-    padding: 16,
-    width: '100%',
+    padding: 12,
   },
   headerContainer: {
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 12,
   },
   title: {
     color: '#1E3A8A',
-    fontSize: 22,
-    fontWeight: '800',
+    fontSize: 20,
+    fontWeight: '700',
     fontFamily: 'serif',
-    textAlign: 'center',
     textTransform: 'uppercase',
   },
   subtitle: {
     color: '#1E3A8A',
     fontSize: 12,
-    fontWeight: '600',
-    textAlign: 'center',
-    marginTop: 8,
+    fontWeight: '500',
+    marginTop: 4,
   },
   buttonContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 16,
+    marginBottom: 12,
+    gap: 8,
   },
   button: {
-    backgroundColor: '#EFF6FF',
-    padding: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#93C5FD',
     flex: 1,
-    marginRight: 8,
+    backgroundColor: '#2563EB',
+    padding: 8,
+    borderRadius: 6,
+    alignItems: 'center',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 4,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 2,
   },
   actionButton: {
     backgroundColor: '#2563EB',
+  },
+  selectPrinterButton: {
+    marginBottom: 12,
+  },
+  resetButton: {
+    minWidth: 100,
+  },
+  createButton: {
+    marginTop: 12,
     padding: 12,
-    borderRadius: 8,
-    flex: 1,
-    marginLeft: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 4,
+  },
+  buttonDisabled: {
+    backgroundColor: '#2563EB80',
   },
   buttonText: {
-    color: '#1F2937',
-    fontSize: 16,
-    fontWeight: '700',
-    textAlign: 'center',
-  },
-  buttonSubText: {
-    color: '#1F2937',
-    fontSize: 12,
-    textAlign: 'center',
-    marginTop: 4,
-  },
-  actionButtonText: {
     color: '#FFFFFF',
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '600',
     textAlign: 'center',
   },
   filterContainer: {
     backgroundColor: '#FFFFFF',
     padding: 12,
-    borderRadius: 8,
+    borderRadius: 6,
     borderWidth: 1,
     borderColor: '#BFDBFE',
-    marginBottom: 16,
+    marginBottom: 12,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 4,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 2,
   },
   filterTitle: {
     color: '#1E3A8A',
-    fontSize: 20,
-    fontWeight: '700',
+    fontSize: 16,
+    fontWeight: '600',
     marginBottom: 8,
     textAlign: 'center',
     textTransform: 'uppercase',
@@ -661,61 +656,49 @@ const styles = StyleSheet.create({
   filterRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'space-between',
+    gap: 8,
     alignItems: 'flex-end',
   },
   filterItem: {
     flex: 1,
-    marginRight: 8,
     minWidth: 100,
   },
   filterLabel: {
     color: '#1F2937',
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '500',
     marginBottom: 4,
   },
   filterInput: {
     backgroundColor: '#1F2937',
     padding: 8,
-    borderRadius: 8,
+    borderRadius: 6,
     borderWidth: 1,
     borderColor: '#93C5FD',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  dateTextInput: {
+  filterInputText: {
     color: '#FFFFFF',
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '500',
   },
   pickerContainer: {
     backgroundColor: '#1F2937',
-    borderRadius: 8,
+    borderRadius: 6,
     borderWidth: 1,
     borderColor: '#93C5FD',
   },
   picker: {
     color: '#FFFFFF',
-    height: 40,
+    height: 36,
   },
-  resetButton: {
-    backgroundColor: '#2563EB',
-    padding: 8,
-    borderRadius: 8,
-    justifyContent: 'center',
-    minWidth: 100,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  resetButtonText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '600',
-    textAlign: 'center',
+  datePicker: {
+    backgroundColor: '#1F2937',
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#93C5FD',
+    marginTop: 4,
   },
   noTransactions: {
     flex: 1,
@@ -724,127 +707,83 @@ const styles = StyleSheet.create({
   },
   noTransactionsText: {
     color: '#1E3A8A',
-    fontSize: 18,
-    fontWeight: '700',
+    fontSize: 16,
+    fontWeight: '600',
     textTransform: 'uppercase',
   },
   noTransactionsSubText: {
-    color: '#9CA3AF',
-    fontSize: 14,
+    color: '#6B7280',
+    fontSize: 12,
     textAlign: 'center',
-    marginTop: 8,
+    marginTop: 4,
   },
   transactionCard: {
-    marginBottom: 16,
+    marginBottom: 12,
   },
   transactionCardGradient: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 8,
+    borderRadius: 6,
     borderWidth: 1,
     borderColor: '#BFDBFE',
-    padding: 16,
+    padding: 12,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 4,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  transactionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
   },
   invoiceText: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '700',
     color: '#1E3A8A',
+  },
+  dateText: {
+    fontSize: 12,
+    color: '#1F2937',
+  },
+  transactionDetails: {
     marginBottom: 8,
   },
   customerText: {
-    fontSize: 16,
+    fontSize: 14,
+    color: '#1F2937',
+    marginBottom: 4,
+  },
+  paymentText: {
+    fontSize: 12,
     color: '#1F2937',
     marginBottom: 4,
   },
   amountText: {
-    fontSize: 16,
+    fontSize: 14,
     color: '#1F2937',
-    marginBottom: 4,
     fontWeight: '600',
-  },
-  paymentText: {
-    fontSize: 14,
-    color: '#1F2937',
-    marginBottom: 4,
-  },
-  dateText: {
-    fontSize: 14,
-    color: '#1F2937',
-    marginBottom: 8,
   },
   itemsContainer: {
     borderTopWidth: 1,
     borderTopColor: '#BFDBFE',
     paddingTop: 8,
+    marginBottom: 8,
   },
   itemsTitle: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '600',
     color: '#1E3A8A',
     marginBottom: 4,
   },
+  itemRow: {
+    marginBottom: 6,
+  },
   itemText: {
-    fontSize: 14,
+    fontSize: 12,
     color: '#1F2937',
-    marginBottom: 4,
-  },
-  printButton: {
-    backgroundColor: '#2563EB',
-    padding: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginTop: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  printButtonDisabled: {
-    backgroundColor: '#2563EB80',
-  },
-  printButtonText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  createButton: {
-    backgroundColor: '#2563EB',
-    padding: 16,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginTop: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  createButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  selectPrinterButton: {
-    backgroundColor: '#2563EB',
-    padding: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  selectPrinterButtonText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '600',
+    lineHeight: 18,
   },
   loadingContainer: {
     flex: 1,
@@ -854,46 +793,26 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     color: '#1E3A8A',
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '600',
-    marginTop: 16,
-    textAlign: 'center',
+    marginTop: 12,
   },
   errorContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#F3F4F6',
-    padding: 20,
+    padding: 12,
   },
   errorText: {
     color: '#DC2626',
-    fontSize: 20,
+    fontSize: 16,
     fontWeight: '600',
     textAlign: 'center',
-    marginBottom: 24,
-    lineHeight: 28,
-  },
-  retryButton: {
-    backgroundColor: '#2563EB',
-    paddingVertical: 14,
-    paddingHorizontal: 32,
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 5,
-  },
-  datePicker: {
-    backgroundColor: '#1F2937',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#93C5FD',
-    marginTop: 4,
+    marginBottom: 12,
   },
   listContainer: {
-    paddingBottom: 80,
+    paddingBottom: 60,
   },
   modalOverlay: {
     flex: 1,
@@ -901,54 +820,42 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
-  printPopupContainer: {
+  modalContainer: {
     backgroundColor: '#FFFFFF',
-    padding: 20,
-    borderRadius: 12,
-    alignItems: 'center',
+    padding: 16,
+    borderRadius: 6,
     width: '80%',
+    alignItems: 'center',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 4,
+    shadowRadius: 2,
+    elevation: 3,
   },
-  printPopupTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: '700',
     color: '#1E3A8A',
     marginBottom: 8,
-    textAlign: 'center',
   },
-  printPopupMessage: {
-    fontSize: 16,
+  modalMessage: {
+    fontSize: 14,
     color: '#1F2937',
     textAlign: 'center',
-    marginBottom: 16,
-    lineHeight: 20,
+    marginBottom: 12,
   },
-  printPopupButtons: {
+  modalButtonContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     width: '100%',
+    gap: 8,
   },
-  printPopupButton: {
+  modalButton: {
     flex: 1,
-    padding: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginHorizontal: 4,
+    padding: 8,
   },
   cancelButton: {
-    backgroundColor: '#9CA3AF',
-  },
-  modalPrintButton: {
-    backgroundColor: '#2563EB',
-  },
-  cancelButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
+    backgroundColor: '#6B7280',
   },
 });
 
