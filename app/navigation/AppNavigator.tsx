@@ -5,6 +5,7 @@ import Logout from '../components/Logout';
 import Inventory from '../components/Inventory';
 import TransactionIndex from '../components/TransactionIndex';
 import TransactionCreate from '../components/TransactionCreate';
+import TransactionReport from '../components/TransactionReport';
 import Monitoring from '../components/Monitoring';
 import Dashboard from '../components/Dashboard';
 
@@ -13,8 +14,9 @@ type RootStackParamList = {
   Login: undefined;
   Logout: undefined;
   Inventory: undefined;
-  TransactionIndex: undefined;
+  TransactionIndex: { showPrint?: boolean };
   TransactionCreate: undefined;
+  TransactionReport: undefined;
   Monitoring: undefined;
   Dashboard: undefined;
 };
@@ -59,6 +61,11 @@ const AppNavigator = () => {
         name="TransactionCreate"
         component={TransactionCreate}
         options={{ title: 'Buat Transaksi Baru' }}
+      />
+      <Stack.Screen
+        name="TransactionReport"
+        component={TransactionReport}
+        options={{ title: 'Laporan Transaksi' }}
       />
       <Stack.Screen
         name="Monitoring"

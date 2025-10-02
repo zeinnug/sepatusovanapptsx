@@ -136,7 +136,7 @@ const Dashboard: React.FC = () => {
 
   const SimpleBarChart: React.FC<{ data: number[]; labels: string[]; title: string; subtitle: string }> = memo(({ data, labels, title, subtitle }) => {
     const maxValue = Math.max(...data, 1);
-    const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD'];
+    const colors = ['#7c3636ff', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD'];
 
     return (
       <View style={styles.barChartContainer}>

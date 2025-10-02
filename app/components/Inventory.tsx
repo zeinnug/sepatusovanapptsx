@@ -1,22 +1,22 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Picker } from '@react-native-picker/picker';
+import { useFocusEffect } from '@react-navigation/native';
+import { debounce } from 'lodash';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
-  View,
+  ActivityIndicator,
+  Alert,
+  Dimensions,
+  FlatList,
+  Image,
+  Platform,
+  StyleSheet,
   Text,
   TextInput,
-  FlatList,
-  StyleSheet,
-  Alert,
-  Image,
   TouchableOpacity,
-  ActivityIndicator,
-  Dimensions,
-  Platform,
+  View,
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { debounce } from 'lodash';
-import { useFocusEffect } from '@react-navigation/native';
-import { Picker } from '@react-native-picker/picker';
-import { Ionicons } from '@expo/vector-icons';
 
 // Define types for inventory item and state
 interface Unit {

@@ -21,6 +21,7 @@ import * as Print from 'expo-print';
 type RootStackParamList = {
   TransactionIndex: { showPrint?: boolean };
   TransactionCreate: undefined;
+  TransactionReport: undefined;
 };
 
 // Navigation prop type
@@ -439,7 +440,10 @@ const TransactionIndex: React.FC<Props> = ({ navigation }) => {
         >
           <Text style={styles.buttonText}>+ Transaksi</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={[styles.button, styles.actionButton]}>
+        <TouchableOpacity 
+          style={[styles.button, styles.actionButton]}
+          onPress={() => navigation.navigate('TransactionReport')}
+        >
           <Text style={styles.buttonText}>Laporan</Text>
         </TouchableOpacity>
       </View>
